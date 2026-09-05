@@ -358,14 +358,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      is_household_member: {
-        Args: { _household_id: string; _user_id: string }
-        Returns: boolean
-      }
-      shares_household: {
-        Args: { _other_user: string; _user_id: string }
-        Returns: boolean
-      }
+      [_ in never]: never
     }
     Enums: {
       [_ in never]: never
