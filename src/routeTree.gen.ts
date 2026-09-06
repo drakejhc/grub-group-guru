@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedKitchenRouteImport } from './routes/_authenticated/kitchen'
 import { Route as AuthenticatedListRouteImport } from './routes/_authenticated/list'
+import { Route as AuthenticatedScanRouteImport } from './routes/_authenticated/scan'
 import { Route as AuthenticatedSetupRouteImport } from './routes/_authenticated/setup'
 import { Route as AuthenticatedTodayRouteImport } from './routes/_authenticated/today'
 
@@ -41,6 +42,11 @@ const AuthenticatedListRoute = AuthenticatedListRouteImport.update({
   path: '/list',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedScanRoute = AuthenticatedScanRouteImport.update({
+  id: '/scan',
+  path: '/scan',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedSetupRoute = AuthenticatedSetupRouteImport.update({
   id: '/setup',
   path: '/setup',
@@ -57,6 +63,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/kitchen': typeof AuthenticatedKitchenRoute
   '/list': typeof AuthenticatedListRoute
+  '/scan': typeof AuthenticatedScanRoute
   '/setup': typeof AuthenticatedSetupRoute
   '/today': typeof AuthenticatedTodayRoute
 }
@@ -65,6 +72,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/kitchen': typeof AuthenticatedKitchenRoute
   '/list': typeof AuthenticatedListRoute
+  '/scan': typeof AuthenticatedScanRoute
   '/setup': typeof AuthenticatedSetupRoute
   '/today': typeof AuthenticatedTodayRoute
 }
@@ -75,14 +83,16 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/kitchen': typeof AuthenticatedKitchenRoute
   '/_authenticated/list': typeof AuthenticatedListRoute
+  '/_authenticated/scan': typeof AuthenticatedScanRoute
   '/_authenticated/setup': typeof AuthenticatedSetupRoute
   '/_authenticated/today': typeof AuthenticatedTodayRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/kitchen' | '/list' | '/setup' | '/today'
+  fullPaths:
+    '/' | '/auth' | '/kitchen' | '/list' | '/scan' | '/setup' | '/today'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/kitchen' | '/list' | '/setup' | '/today'
+  to: '/' | '/auth' | '/kitchen' | '/list' | '/scan' | '/setup' | '/today'
   id:
     | '__root__'
     | '/'
@@ -90,6 +100,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/kitchen'
     | '/_authenticated/list'
+    | '/_authenticated/scan'
     | '/_authenticated/setup'
     | '/_authenticated/today'
   fileRoutesById: FileRoutesById
@@ -137,6 +148,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedListRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/scan': {
+      id: '/_authenticated/scan'
+      path: '/scan'
+      fullPath: '/scan'
+      preLoaderRoute: typeof AuthenticatedScanRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/setup': {
       id: '/_authenticated/setup'
       path: '/setup'
@@ -157,6 +175,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedKitchenRoute: typeof AuthenticatedKitchenRoute
   AuthenticatedListRoute: typeof AuthenticatedListRoute
+  AuthenticatedScanRoute: typeof AuthenticatedScanRoute
   AuthenticatedSetupRoute: typeof AuthenticatedSetupRoute
   AuthenticatedTodayRoute: typeof AuthenticatedTodayRoute
 }
@@ -164,6 +183,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedKitchenRoute: AuthenticatedKitchenRoute,
   AuthenticatedListRoute: AuthenticatedListRoute,
+  AuthenticatedScanRoute: AuthenticatedScanRoute,
   AuthenticatedSetupRoute: AuthenticatedSetupRoute,
   AuthenticatedTodayRoute: AuthenticatedTodayRoute,
 }
