@@ -12,8 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedHouseholdRouteImport } from './routes/_authenticated/household'
 import { Route as AuthenticatedKitchenRouteImport } from './routes/_authenticated/kitchen'
 import { Route as AuthenticatedListRouteImport } from './routes/_authenticated/list'
+import { Route as AuthenticatedMealsRouteImport } from './routes/_authenticated/meals'
+import { Route as AuthenticatedScanRouteImport } from './routes/_authenticated/scan'
 import { Route as AuthenticatedSetupRouteImport } from './routes/_authenticated/setup'
 import { Route as AuthenticatedTodayRouteImport } from './routes/_authenticated/today'
 
@@ -31,6 +34,11 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedHouseholdRoute = AuthenticatedHouseholdRouteImport.update({
+  id: '/household',
+  path: '/household',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedKitchenRoute = AuthenticatedKitchenRouteImport.update({
   id: '/kitchen',
   path: '/kitchen',
@@ -39,6 +47,16 @@ const AuthenticatedKitchenRoute = AuthenticatedKitchenRouteImport.update({
 const AuthenticatedListRoute = AuthenticatedListRouteImport.update({
   id: '/list',
   path: '/list',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedMealsRoute = AuthenticatedMealsRouteImport.update({
+  id: '/meals',
+  path: '/meals',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedScanRoute = AuthenticatedScanRouteImport.update({
+  id: '/scan',
+  path: '/scan',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedSetupRoute = AuthenticatedSetupRouteImport.update({
@@ -55,16 +73,22 @@ const AuthenticatedTodayRoute = AuthenticatedTodayRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/household': typeof AuthenticatedHouseholdRoute
   '/kitchen': typeof AuthenticatedKitchenRoute
   '/list': typeof AuthenticatedListRoute
+  '/meals': typeof AuthenticatedMealsRoute
+  '/scan': typeof AuthenticatedScanRoute
   '/setup': typeof AuthenticatedSetupRoute
   '/today': typeof AuthenticatedTodayRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/household': typeof AuthenticatedHouseholdRoute
   '/kitchen': typeof AuthenticatedKitchenRoute
   '/list': typeof AuthenticatedListRoute
+  '/meals': typeof AuthenticatedMealsRoute
+  '/scan': typeof AuthenticatedScanRoute
   '/setup': typeof AuthenticatedSetupRoute
   '/today': typeof AuthenticatedTodayRoute
 }
@@ -73,23 +97,47 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/household': typeof AuthenticatedHouseholdRoute
   '/_authenticated/kitchen': typeof AuthenticatedKitchenRoute
   '/_authenticated/list': typeof AuthenticatedListRoute
+  '/_authenticated/meals': typeof AuthenticatedMealsRoute
+  '/_authenticated/scan': typeof AuthenticatedScanRoute
   '/_authenticated/setup': typeof AuthenticatedSetupRoute
   '/_authenticated/today': typeof AuthenticatedTodayRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/kitchen' | '/list' | '/setup' | '/today'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/household'
+    | '/kitchen'
+    | '/list'
+    | '/meals'
+    | '/scan'
+    | '/setup'
+    | '/today'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/kitchen' | '/list' | '/setup' | '/today'
+  to:
+    | '/'
+    | '/auth'
+    | '/household'
+    | '/kitchen'
+    | '/list'
+    | '/meals'
+    | '/scan'
+    | '/setup'
+    | '/today'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/household'
     | '/_authenticated/kitchen'
     | '/_authenticated/list'
+    | '/_authenticated/meals'
+    | '/_authenticated/scan'
     | '/_authenticated/setup'
     | '/_authenticated/today'
   fileRoutesById: FileRoutesById
@@ -123,6 +171,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/household': {
+      id: '/_authenticated/household'
+      path: '/household'
+      fullPath: '/household'
+      preLoaderRoute: typeof AuthenticatedHouseholdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/kitchen': {
       id: '/_authenticated/kitchen'
       path: '/kitchen'
@@ -135,6 +190,20 @@ declare module '@tanstack/react-router' {
       path: '/list'
       fullPath: '/list'
       preLoaderRoute: typeof AuthenticatedListRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/meals': {
+      id: '/_authenticated/meals'
+      path: '/meals'
+      fullPath: '/meals'
+      preLoaderRoute: typeof AuthenticatedMealsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/scan': {
+      id: '/_authenticated/scan'
+      path: '/scan'
+      fullPath: '/scan'
+      preLoaderRoute: typeof AuthenticatedScanRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/setup': {
@@ -155,15 +224,21 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedHouseholdRoute: typeof AuthenticatedHouseholdRoute
   AuthenticatedKitchenRoute: typeof AuthenticatedKitchenRoute
   AuthenticatedListRoute: typeof AuthenticatedListRoute
+  AuthenticatedMealsRoute: typeof AuthenticatedMealsRoute
+  AuthenticatedScanRoute: typeof AuthenticatedScanRoute
   AuthenticatedSetupRoute: typeof AuthenticatedSetupRoute
   AuthenticatedTodayRoute: typeof AuthenticatedTodayRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedHouseholdRoute: AuthenticatedHouseholdRoute,
   AuthenticatedKitchenRoute: AuthenticatedKitchenRoute,
   AuthenticatedListRoute: AuthenticatedListRoute,
+  AuthenticatedMealsRoute: AuthenticatedMealsRoute,
+  AuthenticatedScanRoute: AuthenticatedScanRoute,
   AuthenticatedSetupRoute: AuthenticatedSetupRoute,
   AuthenticatedTodayRoute: AuthenticatedTodayRoute,
 }
