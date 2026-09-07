@@ -44,19 +44,18 @@ function Setup() {
     if (!userId) return;
     setBusy(true);
     try {
-      const { data, error } = await supabase
+      const householdId = crypto.randomUUID();
+      const { error } = await supabase
         .from("households")
-        .insert({ name: name.trim() || "Our household", created_by: userId })
-        .select("id")
-        .single();
+        .insert({ id: householdId, name: name.trim() || "Our household", created_by: userId });
       if (error) throw error;
       const { error: memberError } = await supabase
         .from("household_members")
-        .insert({ household_id: data.id, user_id: userId, role: "owner" });
+        .insert({ household_id: householdId, user_id: userId, role: "owner" });
       if (memberError) throw memberError;
       await supabase
         .from("staples")
-        .insert(STARTER_STAPLES.map((s) => ({ ...s, household_id: data.id })));
+        .insert(STARTER_STAPLES.map((s) => ({ ...s, household_id: householdId })));
       await qc.invalidateQueries();
       navigate({ to: "/today", replace: true });
     } catch {
