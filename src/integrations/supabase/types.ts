@@ -14,6 +14,32 @@ export type Database = {
   }
   public: {
     Tables: {
+      household_invites: {
+        Row: {
+          code: string
+          created_at: string
+          household_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          household_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          household_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_invites_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       household_members: {
         Row: {
           household_id: string

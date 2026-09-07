@@ -10,9 +10,6 @@ import { lovable } from "@/integrations/lovable/index";
 import { useSession } from "@/lib/data";
 
 export const Route = createFileRoute("/auth")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    mode: search["mode"] === "signin" ? "signin" : undefined,
-  }),
   head: () => ({
     meta: [
       { title: "Sign in to Larder" },
@@ -28,10 +25,9 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
-  const { mode } = Route.useSearch();
   const navigate = useNavigate();
   const { userId, ready } = useSession();
-  const [isSignUp, setIsSignUp] = useState(mode !== "signin");
+  const [isSignUp, setIsSignUp] = useState(true);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
