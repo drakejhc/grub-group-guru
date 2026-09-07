@@ -53,6 +53,16 @@ function Setup() {
         .from("household_members")
         .insert({ household_id: householdId, user_id: userId, role: "owner" });
       if (memberError) throw memberError;
+      const { data: created } = await supabase
+        .from("households")
+        .select("invite_code")
+        .eq("id", householdId)
+        .maybeSingle();
+      if (created?.invite_code) {
+        await supabase
+          .from("household_invites")
+          .insert({ code: created.invite_code, household_id: householdId });
+      }
       await supabase
         .from("staples")
         .insert(STARTER_STAPLES.map((s) => ({ ...s, household_id: householdId })));
@@ -71,9 +81,9 @@ function Setup() {
     setBusy(true);
     try {
       const { data, error } = await supabase
-        .from("households")
-        .select("id")
-        .eq("invite_code", code.trim().toUpperCase())
+        .from("household_invites")
+        .select("household_id")
+        .eq("code", code.trim().toUpperCase())
         .maybeSingle();
       if (error) throw error;
       if (!data) {
@@ -82,7 +92,7 @@ function Setup() {
       }
       const { error: joinError } = await supabase
         .from("household_members")
-        .insert({ household_id: data.id, user_id: userId });
+        .insert({ household_id: data.household_id, user_id: userId });
       if (joinError) throw joinError;
       await qc.invalidateQueries();
       navigate({ to: "/today", replace: true });
