@@ -114,8 +114,14 @@ function MealsBody({ household }: { household: Household }) {
   }, ["meals", "inventory"]);
 
   function startCooking(entry: MealEntry) {
-    setCooking({ entry, use: [] });
+    const recipe = recipes.find((r) => r.id === entry.recipe_id);
+    const ingredients = recipe?.recipe_ingredients ?? [];
+    const candidates = inventory.filter((inv) =>
+      ingredients.some((ing) => matchesAny(ing.name, [inv.name])),
+    );
+    setCooking({ entry, use: candidates.map((c) => c.id) });
   }
+
 
 
   const addMissing = useMutate(async (missing: RecipeIngredient[]) => {
