@@ -7,6 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  recordStaplePurchases,
   useListItems,
   useMembers,
   useMutate,
@@ -14,6 +15,7 @@ import {
   type Household,
   type ListItem,
 } from "@/lib/data";
+
 import { CATEGORIES, CATEGORY_LABEL, addDays, defaultStorage, type Category } from "@/lib/food";
 import { cn } from "@/lib/utils";
 

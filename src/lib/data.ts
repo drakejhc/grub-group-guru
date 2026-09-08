@@ -234,19 +234,44 @@ export function useHouseholdRealtime(householdId: string | undefined) {
   const qc = useQueryClient();
   useEffect(() => {
     if (!householdId) return;
-    const channel = supabase
-      .channel(`household-${householdId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "list_items" }, () => {
-        qc.invalidateQueries({ queryKey: ["list"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "inventory_items" }, () => {
-        qc.invalidateQueries({ queryKey: ["inventory"] });
-      })
-      .subscribe();
+    const filter = `household_id=eq.${householdId}`;
+    const watch = (table: string, key: string) =>
+      ({ event: "*" as const, schema: "public", table, filter, key });
+    const channel = supabase.channel(`household-${householdId}`);
+    for (const { key, ...cfg } of [
+      watch("list_items", "list"),
+      watch("inventory_items", "inventory"),
+      watch("staples", "staples"),
+      watch("meal_plan_entries", "meals"),
+    ]) {
+      channel.on("postgres_changes", cfg, () => {
+        qc.invalidateQueries({ queryKey: [key] });
+      });
+    }
+    channel.subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
   }, [householdId, qc]);
+}
+
+
+/* ---------------- staples ---------------- */
+
+/** Records today's purchase for any staple whose name matches, ignoring case. */
+export async function recordStaplePurchases(householdId: string, names: string[]) {
+  if (names.length === 0) return;
+  const { data } = await supabase
+    .from("staples")
+    .select("id, name")
+    .eq("household_id", householdId);
+  const wanted = new Set(names.map((n) => n.trim().toLowerCase()));
+  const ids = (data ?? []).filter((s) => wanted.has(s.name.toLowerCase())).map((s) => s.id);
+  if (ids.length === 0) return;
+  await supabase
+    .from("staples")
+    .update({ last_purchased_on: new Date().toISOString().slice(0, 10) })
+    .in("id", ids);
 }
 
 /* ---------------- mutations ---------------- */
@@ -255,6 +280,7 @@ export function useInvalidate() {
   const qc = useQueryClient();
   return (keys: string[]) => keys.forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
 }
+
 
 export function useMutate<TVars>(
   fn: (vars: TVars) => Promise<unknown>,
