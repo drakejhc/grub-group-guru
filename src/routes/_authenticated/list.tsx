@@ -7,6 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  recordStaplePurchases,
   useListItems,
   useMembers,
   useMutate,
@@ -14,6 +15,7 @@ import {
   type Household,
   type ListItem,
 } from "@/lib/data";
+
 import { CATEGORIES, CATEGORY_LABEL, addDays, defaultStorage, type Category } from "@/lib/food";
 import { cn } from "@/lib/utils";
 
@@ -64,6 +66,19 @@ function ListBody({ household }: { household: Household }) {
     if (error) throw error;
   }, ["list"]);
 
+  const restore = useMutate(async (item: ListItem) => {
+    const { error } = await supabase.from("list_items").insert({
+      household_id: item.household_id,
+      name: item.name,
+      quantity: item.quantity,
+      category: item.category,
+      note: item.note,
+      requested_by: item.requested_by,
+      status: item.status,
+    });
+    if (error) throw error;
+  }, ["list"]);
+
   const putAway = useMutate(async () => {
     if (purchased.length === 0) return;
     const rows = purchased.map((item) => {
@@ -88,15 +103,16 @@ function ListBody({ household }: { household: Household }) {
         purchased.map((p) => p.id),
       );
     if (clearError) throw clearError;
-    const names = purchased.map((p) => p.name.toLowerCase());
-    await supabase
-      .from("staples")
-      .update({ last_purchased_on: new Date().toISOString().slice(0, 10) })
-      .eq("household_id", household.id)
-      .in("name", names);
+    await recordStaplePurchases(
+      household.id,
+      purchased.map((p) => p.name),
+    );
   }, ["list", "inventory", "staples"]);
 
+  const pendingId = toggle.isPending ? (toggle.variables as ListItem | undefined)?.id : null;
+
   const nameOf = (id: string) => members.find((m) => m.id === id)?.display_name ?? "Someone";
+
 
   const grouped = CATEGORIES.map((category) => ({
     category,
@@ -147,12 +163,19 @@ function ListBody({ household }: { household: Household }) {
                   className={cn(
                     "my-1 flex size-7 shrink-0 items-center justify-center rounded-full border border-border transition-colors hover:border-primary",
                     shopping && "size-9",
+                    pendingId === item.id && "border-primary bg-primary text-primary-foreground",
                   )}
                 >
-                  <Check className="size-4 text-transparent" aria-hidden />
+                  <Check
+                    className={cn(
+                      "size-4",
+                      pendingId === item.id ? "text-primary-foreground" : "text-transparent",
+                    )}
+                    aria-hidden
+                  />
                 </button>
                 <div className={cn("flex-1 py-3", shopping && "py-4")}>
-                  <p className={cn(shopping && "text-lg")}>
+                  <p className={cn(shopping && "text-lg", pendingId === item.id && "text-muted-foreground line-through")}>
                     {item.name}
                     {item.quantity && (
                       <span className="ml-2 text-muted-foreground">{item.quantity}</span>
@@ -162,9 +185,20 @@ function ListBody({ household }: { household: Household }) {
                 </div>
                 <button
                   aria-label={`Remove ${item.name}`}
-                  onClick={() => remove.mutate(item.id)}
+                  onClick={() =>
+                    remove.mutate(item.id, {
+                      onSuccess: () =>
+                        toast(`${item.name} removed`, {
+                          action: {
+                            label: "Undo",
+                            onClick: () => restore.mutate(item),
+                          },
+                        }),
+                    })
+                  }
                   className="text-muted-foreground transition-colors hover:text-destructive"
                 >
+
                   <Trash2 className="size-4" aria-hidden />
                 </button>
               </li>
@@ -181,13 +215,17 @@ function ListBody({ household }: { household: Household }) {
               <li key={item.id} className="flex items-center justify-between gap-3 text-sm">
                 <button
                   onClick={() => toggle.mutate(item)}
-                  className="text-left text-muted-foreground line-through"
+                  className="flex flex-1 items-center gap-3 text-left"
                 >
-                  {item.name}
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                    <Check className="size-4" aria-hidden />
+                  </span>
+                  <span className="text-muted-foreground line-through">{item.name}</span>
                 </button>
                 <span className="text-xs text-muted-foreground">tap to undo</span>
               </li>
             ))}
+
           </ul>
           <Button
             className="mt-5 w-full rounded-full"
