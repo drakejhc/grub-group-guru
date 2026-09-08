@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useMembers, useMutate, useSession, useStaples, type Household } from "@/lib/data";
-import { daysUntil, guessCategory } from "@/lib/food";
+import { daysUntil, guessCategory, stapleDue } from "@/lib/food";
 
 export const Route = createFileRoute("/_authenticated/household")({
   head: () => ({
@@ -162,19 +162,20 @@ function HouseholdBody({ household }: { household: Household }) {
         <ul className="mt-5 space-y-3">
           {staples.map((staple) => {
             const since = staple.last_purchased_on ? -(daysUntil(staple.last_purchased_on) ?? 0) : null;
-            const due = since !== null && since >= staple.interval_days;
+            const due = stapleDue(staple);
             return (
               <li key={staple.id} className="flex items-center gap-3">
                 <div className="flex-1">
                   <p>{staple.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {since === null
-                      ? `usually every ${staple.interval_days} days`
+                      ? `usually every ${staple.interval_days} days — not bought yet`
                       : due
                         ? `last bought ${since} days ago — probably due`
                         : `bought ${since} days ago`}
                   </p>
                 </div>
+
                 <button
                   onClick={() =>
                     stapleToList.mutate(staple, {

@@ -11,7 +11,7 @@ import {
   useStaples,
   type Household,
 } from "@/lib/data";
-import { daysUntil, freshnessLabel, todayStr, weekDates } from "@/lib/food";
+import { daysUntil, freshnessLabel, stapleDue, todayStr, weekDates } from "@/lib/food";
 
 export const Route = createFileRoute("/_authenticated/today")({
   head: () => ({
@@ -57,11 +57,8 @@ function TodayBody({ household }: { household: Household }) {
       return d !== null && d <= 3;
     })
     .slice(0, 5);
-  const dueStaples = (staples.data ?? []).filter((s) => {
-    if (!s.last_purchased_on) return false;
-    const since = -(daysUntil(s.last_purchased_on) ?? 0);
-    return since >= s.interval_days;
-  });
+  const dueStaples = (staples.data ?? []).filter(stapleDue);
+
   const today = todayStr();
   const tonight = (meals.data ?? []).find((m) => m.plan_date === today);
 

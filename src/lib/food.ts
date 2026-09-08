@@ -99,25 +99,73 @@ export function freshnessLabel(dateStr: string | null): string | null {
   return "keeps a while";
 }
 
-export function normalise(name: string): string {
+const STOP_WORDS = new Set([
+  "fresh",
+  "organic",
+  "large",
+  "small",
+  "pack",
+  "packet",
+  "bag",
+  "box",
+  "tin",
+  "can",
+  "free",
+  "range",
+  "semi",
+  "skimmed",
+  "whole",
+  "the",
+  "and",
+  "with",
+  "for",
+]);
+
+/** Meaningful, singularised words in a product or ingredient name. */
+export function tokens(name: string): string[] {
   return name
     .toLowerCase()
     .replace(/[^a-z\s]/g, " ")
-    .replace(/\b(fresh|organic|large|small|pack|packet|bag|of|the|a)\b/g, " ")
-    .replace(/s\b/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+    .split(/\s+/)
+    .map((w) => {
+      if (w.length > 4 && w.endsWith("ies")) return `${w.slice(0, -3)}y`;
+      if (w.length > 4 && w.endsWith("es")) return w.slice(0, -2);
+      if (w.length > 3 && w.endsWith("s")) return w.slice(0, -1);
+      return w;
+    })
+    .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
+}
+
+export function normalise(name: string): string {
+  return tokens(name).join(" ");
+}
+
+/**
+ * Word-level match: every word of one name must appear in the other, so
+ * "egg" no longer matches "eggplant" and "milk" no longer matches "milk chocolate"
+ * unless one name is fully contained in the other.
+ */
+export function sameProduct(a: string, b: string): boolean {
+  const left = tokens(a);
+  const right = tokens(b);
+  if (left.length === 0 || right.length === 0) return false;
+  const rightSet = new Set(right);
+  const overlap = left.filter((t) => rightSet.has(t)).length;
+  if (overlap === 0) return false;
+  return overlap === left.length || overlap === right.length;
 }
 
 export function matchesAny(ingredient: string, haystack: string[]): boolean {
-  const target = normalise(ingredient);
-  if (!target) return false;
-  return haystack.some((h) => {
-    const item = normalise(h);
-    if (!item) return false;
-    return item.includes(target) || target.includes(item);
-  });
+  return haystack.some((h) => sameProduct(ingredient, h));
 }
+
+/** A staple with no recorded purchase counts as due — otherwise it never surfaces. */
+export function stapleDue(staple: { last_purchased_on: string | null; interval_days: number }) {
+  if (!staple.last_purchased_on) return true;
+  const since = -(daysUntil(staple.last_purchased_on) ?? 0);
+  return since >= staple.interval_days;
+}
+
 
 export function weekDates(offsetWeeks = 0): string[] {
   const base = new Date();
