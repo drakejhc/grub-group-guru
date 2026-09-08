@@ -85,17 +85,13 @@ function ScanBody({ household }: { household: Household }) {
       const { error } = await supabase.from("inventory_items").insert(rows);
       if (error) throw error;
 
-      const names = items.map((i) => i.name.toLowerCase());
+      const names = items.map((i) => i.name);
       const { data: openItems } = await supabase
         .from("list_items")
         .select("id, name")
         .eq("household_id", household.id)
         .eq("status", "open");
-      const matched = (openItems ?? []).filter((li) =>
-        names.some(
-          (n) => n.includes(li.name.toLowerCase()) || li.name.toLowerCase().includes(n),
-        ),
-      );
+      const matched = (openItems ?? []).filter((li) => matchesAny(li.name, names));
       if (matched.length > 0) {
         await supabase
           .from("list_items")
@@ -105,11 +101,8 @@ function ScanBody({ household }: { household: Household }) {
             matched.map((m) => m.id),
           );
       }
-      await supabase
-        .from("staples")
-        .update({ last_purchased_on: new Date().toISOString().slice(0, 10) })
-        .eq("household_id", household.id)
-        .in("name", items.map((i) => i.name));
+      await recordStaplePurchases(household.id, names);
+
 
       await qc.invalidateQueries();
       toast.success(
