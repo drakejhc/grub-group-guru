@@ -161,12 +161,19 @@ function ListBody({ household }: { household: Household }) {
                   className={cn(
                     "my-1 flex size-7 shrink-0 items-center justify-center rounded-full border border-border transition-colors hover:border-primary",
                     shopping && "size-9",
+                    pendingId === item.id && "border-primary bg-primary text-primary-foreground",
                   )}
                 >
-                  <Check className="size-4 text-transparent" aria-hidden />
+                  <Check
+                    className={cn(
+                      "size-4",
+                      pendingId === item.id ? "text-primary-foreground" : "text-transparent",
+                    )}
+                    aria-hidden
+                  />
                 </button>
                 <div className={cn("flex-1 py-3", shopping && "py-4")}>
-                  <p className={cn(shopping && "text-lg")}>
+                  <p className={cn(shopping && "text-lg", pendingId === item.id && "text-muted-foreground line-through")}>
                     {item.name}
                     {item.quantity && (
                       <span className="ml-2 text-muted-foreground">{item.quantity}</span>
@@ -176,9 +183,20 @@ function ListBody({ household }: { household: Household }) {
                 </div>
                 <button
                   aria-label={`Remove ${item.name}`}
-                  onClick={() => remove.mutate(item.id)}
+                  onClick={() =>
+                    remove.mutate(item.id, {
+                      onSuccess: () =>
+                        toast(`${item.name} removed`, {
+                          action: {
+                            label: "Undo",
+                            onClick: () => restore.mutate(item),
+                          },
+                        }),
+                    })
+                  }
                   className="text-muted-foreground transition-colors hover:text-destructive"
                 >
+
                   <Trash2 className="size-4" aria-hidden />
                 </button>
               </li>
