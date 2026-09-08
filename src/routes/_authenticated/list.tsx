@@ -109,8 +109,10 @@ function ListBody({ household }: { household: Household }) {
     );
   }, ["list", "inventory", "staples"]);
 
+  const pendingId = toggle.isPending ? (toggle.variables as ListItem | undefined)?.id : null;
 
   const nameOf = (id: string) => members.find((m) => m.id === id)?.display_name ?? "Someone";
+
 
   const grouped = CATEGORIES.map((category) => ({
     category,
@@ -213,13 +215,17 @@ function ListBody({ household }: { household: Household }) {
               <li key={item.id} className="flex items-center justify-between gap-3 text-sm">
                 <button
                   onClick={() => toggle.mutate(item)}
-                  className="text-left text-muted-foreground line-through"
+                  className="flex flex-1 items-center gap-3 text-left"
                 >
-                  {item.name}
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                    <Check className="size-4" aria-hidden />
+                  </span>
+                  <span className="text-muted-foreground line-through">{item.name}</span>
                 </button>
                 <span className="text-xs text-muted-foreground">tap to undo</span>
               </li>
             ))}
+
           </ul>
           <Button
             className="mt-5 w-full rounded-full"
