@@ -9,8 +9,9 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { extractReceipt, type ExtractedItem } from "@/lib/receipt.functions";
-import { useSession, type Household } from "@/lib/data";
-import { LOCATION_LABEL, addDays, type StorageLocation } from "@/lib/food";
+import { recordStaplePurchases, useSession, type Household } from "@/lib/data";
+import { LOCATION_LABEL, addDays, matchesAny, type StorageLocation } from "@/lib/food";
+
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/scan")({
