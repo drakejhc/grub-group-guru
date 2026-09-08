@@ -64,6 +64,19 @@ function ListBody({ household }: { household: Household }) {
     if (error) throw error;
   }, ["list"]);
 
+  const restore = useMutate(async (item: ListItem) => {
+    const { error } = await supabase.from("list_items").insert({
+      household_id: item.household_id,
+      name: item.name,
+      quantity: item.quantity,
+      category: item.category,
+      note: item.note,
+      requested_by: item.requested_by,
+      status: item.status,
+    });
+    if (error) throw error;
+  }, ["list"]);
+
   const putAway = useMutate(async () => {
     if (purchased.length === 0) return;
     const rows = purchased.map((item) => {
@@ -88,13 +101,12 @@ function ListBody({ household }: { household: Household }) {
         purchased.map((p) => p.id),
       );
     if (clearError) throw clearError;
-    const names = purchased.map((p) => p.name.toLowerCase());
-    await supabase
-      .from("staples")
-      .update({ last_purchased_on: new Date().toISOString().slice(0, 10) })
-      .eq("household_id", household.id)
-      .in("name", names);
+    await recordStaplePurchases(
+      household.id,
+      purchased.map((p) => p.name),
+    );
   }, ["list", "inventory", "staples"]);
+
 
   const nameOf = (id: string) => members.find((m) => m.id === id)?.display_name ?? "Someone";
 
