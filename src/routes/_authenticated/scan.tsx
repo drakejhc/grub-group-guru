@@ -51,7 +51,11 @@ function ScanBody({ household }: { household: Household }) {
   async function onFile(file: File) {
     setBusy(true);
     try {
-      const dataUrl = await toDataUrl(file);
+      const dataUrl = await toCompressedDataUrl(file);
+      if (dataUrl.length > 11_000_000) {
+        toast.error("That photo is too large — try one that's just the receipt.");
+        return;
+      }
       const result = await extract({ data: { imageDataUrl: dataUrl } });
       if (result.items.length === 0) {
         toast.error("No items found — try a clearer photo of the whole receipt.");
@@ -63,6 +67,7 @@ function ScanBody({ household }: { household: Household }) {
       setBusy(false);
     }
   }
+
 
   async function save() {
     if (!items || items.length === 0) return;
@@ -221,3 +226,30 @@ function toDataUrl(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+/** Shrink a phone photo before sending it — full-size images are slow and can be rejected. */
+async function toCompressedDataUrl(file: File, maxSide = 1600): Promise<string> {
+  const original = await toDataUrl(file);
+  if (typeof document === "undefined") return original;
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("bad image"));
+      img.src = original;
+    });
+    const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+    if (scale === 1 && original.length < 3_000_000) return original;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(image.width * scale);
+    canvas.height = Math.round(image.height * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return original;
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const out = canvas.toDataURL("image/jpeg", 0.82);
+    return out.length < original.length ? out : original;
+  } catch {
+    return original;
+  }
+}
+
