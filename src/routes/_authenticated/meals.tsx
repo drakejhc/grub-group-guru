@@ -93,28 +93,30 @@ function MealsBody({ household }: { household: Household }) {
     if (error) throw error;
   }, ["meals"]);
 
-  const cookMeal = useMutate(async (entry: MealEntry) => {
+  const [cooking, setCooking] = useState<{ entry: MealEntry; use: string[] } | null>(null);
+
+  const cookCandidates = useMemo(() => {
+    if (!cooking?.entry.recipe_id) return [] as typeof inventory;
+    const recipe = recipes.find((r) => r.id === cooking.entry.recipe_id);
+    const ingredients = recipe?.recipe_ingredients ?? [];
+    return inventory.filter((inv) => ingredients.some((ing) => matchesAny(ing.name, [inv.name])));
+  }, [cooking, recipes, inventory]);
+
+  const cookMeal = useMutate(async ({ entry, use }: { entry: MealEntry; use: string[] }) => {
     const { error } = await supabase
       .from("meal_plan_entries")
       .update({ cooked: true })
       .eq("id", entry.id);
     if (error) throw error;
-    if (!entry.recipe_id) return;
-    const recipe = recipes.find((r) => r.id === entry.recipe_id);
-    const used = (recipe?.recipe_ingredients ?? [])
-      .map((ing) => inventory.filter((inv) => matchesAny(ing.name, [inv.name])))
-      .flat()
-      .filter((inv) => inv.category === "produce" || inv.category === "meat" || inv.category === "dairy");
-    if (used.length > 0) {
-      await supabase
-        .from("inventory_items")
-        .delete()
-        .in(
-          "id",
-          used.map((u) => u.id),
-        );
+    if (use.length > 0) {
+      await supabase.from("inventory_items").delete().in("id", use);
     }
   }, ["meals", "inventory"]);
+
+  function startCooking(entry: MealEntry) {
+    setCooking({ entry, use: [] });
+  }
+
 
   const addMissing = useMutate(async (missing: RecipeIngredient[]) => {
     if (!userId || missing.length === 0) return;
