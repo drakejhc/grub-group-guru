@@ -63,9 +63,13 @@ function Setup() {
           .from("household_invites")
           .insert({ code: created.invite_code, household_id: householdId });
       }
+      const today = new Date().toISOString().slice(0, 10);
       await supabase
         .from("staples")
-        .insert(STARTER_STAPLES.map((s) => ({ ...s, household_id: householdId })));
+        .insert(
+          STARTER_STAPLES.map((s) => ({ ...s, household_id: householdId, last_purchased_on: today })),
+        );
+
       await qc.invalidateQueries();
       navigate({ to: "/today", replace: true });
     } catch {
