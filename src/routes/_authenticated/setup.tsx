@@ -84,20 +84,11 @@ function Setup() {
     if (!userId) return;
     setBusy(true);
     try {
-      const { data, error } = await supabase
-        .from("household_invites")
-        .select("household_id")
-        .eq("code", code.trim().toUpperCase())
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) {
+      const result = await join({ data: { code: code.trim() } });
+      if (!result.ok) {
         toast.error("No household with that code");
         return;
       }
-      const { error: joinError } = await supabase
-        .from("household_members")
-        .insert({ household_id: data.household_id, user_id: userId });
-      if (joinError) throw joinError;
       await qc.invalidateQueries();
       navigate({ to: "/today", replace: true });
     } catch {
@@ -106,6 +97,7 @@ function Setup() {
       setBusy(false);
     }
   }
+
 
   return (
     <main className="mx-auto min-h-screen max-w-xl px-6 py-16">
