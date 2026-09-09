@@ -192,16 +192,13 @@ function MealsBody({ household }: { household: Household }) {
                 </span>
                 {!meal.cooked && (
                   <button
-                    onClick={() =>
-                      cookMeal.mutate(meal, {
-                        onSuccess: () => toast.success("Cooked — kitchen updated"),
-                      })
-                    }
+                    onClick={() => startCooking(meal)}
                     className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                   >
                     <Check className="size-3.5" aria-hidden /> cooked
                   </button>
                 )}
+
                 <button
                   aria-label={`Remove ${meal.title}`}
                   onClick={() => removeMeal.mutate(meal.id)}
