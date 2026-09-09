@@ -99,22 +99,47 @@ export function useSession() {
 
 /* ---------------- household ---------------- */
 
-export function useHousehold() {
+const ACTIVE_HOUSEHOLD_KEY = "larder.active-household";
+
+export function useHouseholds() {
   return useQuery({
-    queryKey: ["household"],
+    queryKey: ["households"],
     queryFn: async () => {
       const { data: memberships, error } = await supabase
         .from("household_members")
         .select("household_id, households(id, name, invite_code, created_by)")
         .order("joined_at", { ascending: true });
       if (error) throw error;
-      const first = (memberships ?? [])[0] as unknown as
-        | { households: Household | null }
-        | undefined;
-      return (first?.households ?? null) as Household | null;
+      return ((memberships ?? []) as unknown as Array<{ households: Household | null }>)
+        .map((m) => m.households)
+        .filter((h): h is Household => !!h);
     },
   });
 }
+
+export function useHousehold() {
+  const query = useHouseholds();
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setActiveId(window.localStorage.getItem(ACTIVE_HOUSEHOLD_KEY));
+  }, []);
+
+  const households = query.data ?? [];
+  const active = households.find((h) => h.id === activeId) ?? households[0] ?? null;
+
+  return {
+    data: query.data ? active : undefined,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    households,
+    setActive: (id: string) => {
+      window.localStorage.setItem(ACTIVE_HOUSEHOLD_KEY, id);
+      setActiveId(id);
+    },
+  };
+}
+
 
 export function useMembers(householdId: string | undefined) {
   return useQuery({

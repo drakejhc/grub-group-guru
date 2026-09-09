@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -9,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/lib/data";
+import { joinHouseholdByCode } from "@/lib/household.functions";
+
 
 export const Route = createFileRoute("/_authenticated/setup")({
   head: () => ({
@@ -38,6 +41,8 @@ function Setup() {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const join = useServerFn(joinHouseholdByCode);
+
 
   async function createHousehold(e: React.FormEvent) {
     e.preventDefault();
@@ -63,9 +68,13 @@ function Setup() {
           .from("household_invites")
           .insert({ code: created.invite_code, household_id: householdId });
       }
+      const today = new Date().toISOString().slice(0, 10);
       await supabase
         .from("staples")
-        .insert(STARTER_STAPLES.map((s) => ({ ...s, household_id: householdId })));
+        .insert(
+          STARTER_STAPLES.map((s) => ({ ...s, household_id: householdId, last_purchased_on: today })),
+        );
+
       await qc.invalidateQueries();
       navigate({ to: "/today", replace: true });
     } catch {
@@ -80,20 +89,11 @@ function Setup() {
     if (!userId) return;
     setBusy(true);
     try {
-      const { data, error } = await supabase
-        .from("household_invites")
-        .select("household_id")
-        .eq("code", code.trim().toUpperCase())
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) {
+      const result = await join({ data: { code: code.trim() } });
+      if (!result.ok) {
         toast.error("No household with that code");
         return;
       }
-      const { error: joinError } = await supabase
-        .from("household_members")
-        .insert({ household_id: data.household_id, user_id: userId });
-      if (joinError) throw joinError;
       await qc.invalidateQueries();
       navigate({ to: "/today", replace: true });
     } catch {
@@ -102,6 +102,7 @@ function Setup() {
       setBusy(false);
     }
   }
+
 
   return (
     <main className="mx-auto min-h-screen max-w-xl px-6 py-16">

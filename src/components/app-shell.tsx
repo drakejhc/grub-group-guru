@@ -49,8 +49,9 @@ export function AppShell({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { data: household, isLoading, isError } = useHousehold();
+  const { data: household, isLoading, isError, households, setActive } = useHousehold();
   useHouseholdRealtime(household?.id);
+
 
   useEffect(() => {
     if (!isLoading && !isError && household === null) navigate({ to: "/setup", replace: true });
@@ -86,12 +87,32 @@ export function AppShell({
               </Link>
             ))}
           </nav>
-          <button
-            onClick={signOut}
-            className="text-sm text-muted-foreground underline-offset-4 hover:underline"
-          >
-            Sign out
-          </button>
+          <div className="flex items-center gap-3">
+            {households.length > 1 && household && (
+              <select
+                aria-label="Switch household"
+                value={household.id}
+                onChange={(e) => {
+                  setActive(e.target.value);
+                  void queryClient.invalidateQueries();
+                }}
+                className="rounded-full border border-border bg-card px-3 py-1.5 text-sm"
+              >
+                {households.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={signOut}
+              className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+            >
+              Sign out
+            </button>
+          </div>
+
         </div>
       </header>
 
