@@ -5,6 +5,15 @@ import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
 import { supabase } from "@/integrations/supabase/client";
 import {
   useInventory,
@@ -270,6 +279,83 @@ function MealsBody({ household }: { household: Household }) {
           </article>
         ))}
       </div>
+
+      <Dialog open={!!cooking} onOpenChange={(open) => !open && setCooking(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Used it up?</DialogTitle>
+            <DialogDescription>
+              Untick anything you still have left — the rest leaves your kitchen.
+            </DialogDescription>
+          </DialogHeader>
+          {cookCandidates.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nothing in your kitchen matches this meal, so nothing will be removed.
+            </p>
+          ) : (
+            <ul className="max-h-64 space-y-2 overflow-y-auto">
+              {cookCandidates.map((inv) => {
+                const ticked = cooking?.use.includes(inv.id) ?? false;
+                return (
+                  <li key={inv.id}>
+                    <button
+                      onClick={() =>
+                        setCooking((c) =>
+                          c
+                            ? {
+                                ...c,
+                                use: ticked
+                                  ? c.use.filter((id) => id !== inv.id)
+                                  : [...c.use, inv.id],
+                              }
+                            : c,
+                        )
+                      }
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-secondary"
+                    >
+                      <span
+                        className={cn(
+                          "flex size-6 items-center justify-center rounded-full border border-border",
+                          ticked && "border-primary bg-primary text-primary-foreground",
+                        )}
+                      >
+                        <Check className={cn("size-3.5", !ticked && "text-transparent")} aria-hidden />
+                      </span>
+                      <span className="flex-1 text-sm">{inv.name}</span>
+                      <span className="text-xs text-muted-foreground">{inv.quantity}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" className="rounded-full" onClick={() => setCooking(null)}>
+              Cancel
+            </Button>
+            <Button
+              className="rounded-full"
+              onClick={() => {
+                if (!cooking) return;
+                cookMeal.mutate(cooking, {
+                  onSuccess: () => {
+                    toast.success(
+                      cooking.use.length > 0
+                        ? `Cooked — ${cooking.use.length} item${cooking.use.length > 1 ? "s" : ""} used up`
+                        : "Cooked",
+                    );
+                    setCooking(null);
+                  },
+                  onError: () => toast.error("Couldn't update that"),
+                });
+              }}
+            >
+              Mark cooked
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
+
 }
