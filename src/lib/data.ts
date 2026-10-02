@@ -253,6 +253,37 @@ export function useMealPlan(householdId: string | undefined, dates: string[]) {
   });
 }
 
+export function useFavourites(householdId: string | undefined) {
+  return useQuery({
+    queryKey: ["favourites", householdId],
+    enabled: !!householdId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("recipe_favourites")
+        .select("recipe_id")
+        .eq("household_id", householdId!);
+      if (error) throw error;
+      return new Set((data ?? []).map((r) => r.recipe_id));
+    },
+  });
+}
+
+export function usePantryFlags(householdId: string | undefined) {
+  return useQuery({
+    queryKey: ["pantry-flags", householdId],
+    enabled: !!householdId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("household_pantry_flags")
+        .select("id, name")
+        .eq("household_id", householdId!)
+        .order("name");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
 /* ---------------- realtime ---------------- */
 
 export function useHouseholdRealtime(householdId: string | undefined) {
@@ -268,6 +299,8 @@ export function useHouseholdRealtime(householdId: string | undefined) {
       watch("inventory_items", "inventory"),
       watch("staples", "staples"),
       watch("meal_plan_entries", "meals"),
+      watch("recipe_favourites", "favourites"),
+      watch("household_pantry_flags", "pantry-flags"),
     ]) {
       channel.on("postgres_changes", cfg, () => {
         qc.invalidateQueries({ queryKey: [key] });
