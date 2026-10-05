@@ -49,7 +49,7 @@ export function useRecipeActions(householdId: string) {
   );
 
   const toggleFlag = useMutate(
-    async ({ name, id }: { name: string; id?: string }) => {
+    async ({ name, id }: { name: string; id?: string | undefined }) => {
       if (id) {
         const { error } = await supabase.from("household_pantry_flags").delete().eq("id", id);
         if (error) throw error;
