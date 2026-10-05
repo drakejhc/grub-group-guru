@@ -1,7 +1,7 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, type ReactNode } from "react";
-import { CalendarRange, Home, ListChecks, Refrigerator, Users } from "lucide-react";
+import { BookOpen, CalendarRange, Home, ListChecks, Refrigerator, Users } from "lucide-react";
 
 import { QuickAdd } from "@/components/quick-add";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,6 +13,7 @@ const TABS = [
   { to: "/list", label: "List", icon: ListChecks },
   { to: "/kitchen", label: "Kitchen", icon: Refrigerator },
   { to: "/meals", label: "Meals", icon: CalendarRange },
+  { to: "/recipes", label: "Recipes", icon: BookOpen },
   { to: "/household", label: "Household", icon: Users },
 ] as const;
 
