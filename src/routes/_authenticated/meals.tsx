@@ -1,4 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
+import { rankRecipes } from "@/lib/recipes";
 import { useMemo, useState } from "react";
 import { Check, Plus, X } from "lucide-react";
 import { toast } from "sonner";
@@ -61,26 +62,13 @@ function MealsBody({ household }: { household: Household }) {
   const { data: plan = [] } = useMealPlan(household.id, dates);
   const { userId } = useSession();
 
-  const haveNames = inventory.map((i) => i.name);
-
-  const ranked = useMemo(() => {
-    return recipes
-      .map((recipe) => {
-        const ingredients = recipe.recipe_ingredients ?? [];
-        const have = ingredients.filter((ing) => matchesAny(ing.name, haveNames));
-        return {
-          recipe,
-          ingredients,
-          have: have.length,
-          missing: ingredients.filter((ing) => !matchesAny(ing.name, haveNames)),
-        };
-      })
-      .sort((a, b) => {
-        const ratioA = a.ingredients.length ? a.have / a.ingredients.length : 0;
-        const ratioB = b.ingredients.length ? b.have / b.ingredients.length : 0;
-        return ratioB - ratioA || a.recipe.minutes - b.recipe.minutes;
-      });
-  }, [recipes, haveNames]);
+  const ranked = useMemo(
+    () =>
+      rankRecipes(recipes, inventory.map((i) => i.name))
+        .slice(0, 5)
+        .map((r) => ({ ...r, have: r.have.length })),
+    [recipes, inventory],
+  );
 
   const addMeal = useMutate(
     async ({ title, recipeId }: { title: string; recipeId: string | null }) => {
@@ -221,13 +209,18 @@ function MealsBody({ household }: { household: Household }) {
         )}
       </section>
 
-      <h2 className="pt-1 text-xl">Ideas for you</h2>
+      <div className="flex items-center justify-between pt-1">
+        <h2 className="text-xl">Ideas for you</h2>
+        <Link to="/recipes" className="text-sm text-primary hover:underline">
+          Browse all recipes
+        </Link>
+      </div>
       <div className="space-y-3">
         {ranked.map(({ recipe, ingredients, have, missing }) => (
           <article key={recipe.id} className="card-soft p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-lg">{recipe.title}</h3>
+                <Link to="/recipes/$id" params={{ id: recipe.id }} className="hover:underline"><h3 className="text-lg">{recipe.title}</h3></Link>
                 <p className="mt-1 text-sm text-muted-foreground">{recipe.description}</p>
               </div>
               <span className="shrink-0 rounded-full bg-secondary px-3 py-1 text-xs text-secondary-foreground">
