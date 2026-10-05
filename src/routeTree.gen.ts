@@ -16,6 +16,7 @@ import { Route as AuthenticatedHouseholdRouteImport } from './routes/_authentica
 import { Route as AuthenticatedKitchenRouteImport } from './routes/_authenticated/kitchen'
 import { Route as AuthenticatedListRouteImport } from './routes/_authenticated/list'
 import { Route as AuthenticatedMealsRouteImport } from './routes/_authenticated/meals'
+import { Route as AuthenticatedRecipesRouteImport } from './routes/_authenticated/recipes'
 import { Route as AuthenticatedScanRouteImport } from './routes/_authenticated/scan'
 import { Route as AuthenticatedSetupRouteImport } from './routes/_authenticated/setup'
 import { Route as AuthenticatedTodayRouteImport } from './routes/_authenticated/today'
@@ -54,6 +55,11 @@ const AuthenticatedMealsRoute = AuthenticatedMealsRouteImport.update({
   path: '/meals',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedRecipesRoute = AuthenticatedRecipesRouteImport.update({
+  id: '/recipes',
+  path: '/recipes',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedScanRoute = AuthenticatedScanRouteImport.update({
   id: '/scan',
   path: '/scan',
@@ -77,6 +83,7 @@ export interface FileRoutesByFullPath {
   '/kitchen': typeof AuthenticatedKitchenRoute
   '/list': typeof AuthenticatedListRoute
   '/meals': typeof AuthenticatedMealsRoute
+  '/recipes': typeof AuthenticatedRecipesRoute
   '/scan': typeof AuthenticatedScanRoute
   '/setup': typeof AuthenticatedSetupRoute
   '/today': typeof AuthenticatedTodayRoute
@@ -88,6 +95,7 @@ export interface FileRoutesByTo {
   '/kitchen': typeof AuthenticatedKitchenRoute
   '/list': typeof AuthenticatedListRoute
   '/meals': typeof AuthenticatedMealsRoute
+  '/recipes': typeof AuthenticatedRecipesRoute
   '/scan': typeof AuthenticatedScanRoute
   '/setup': typeof AuthenticatedSetupRoute
   '/today': typeof AuthenticatedTodayRoute
@@ -101,6 +109,7 @@ export interface FileRoutesById {
   '/_authenticated/kitchen': typeof AuthenticatedKitchenRoute
   '/_authenticated/list': typeof AuthenticatedListRoute
   '/_authenticated/meals': typeof AuthenticatedMealsRoute
+  '/_authenticated/recipes': typeof AuthenticatedRecipesRoute
   '/_authenticated/scan': typeof AuthenticatedScanRoute
   '/_authenticated/setup': typeof AuthenticatedSetupRoute
   '/_authenticated/today': typeof AuthenticatedTodayRoute
@@ -114,6 +123,7 @@ export interface FileRouteTypes {
     | '/kitchen'
     | '/list'
     | '/meals'
+    | '/recipes'
     | '/scan'
     | '/setup'
     | '/today'
@@ -125,6 +135,7 @@ export interface FileRouteTypes {
     | '/kitchen'
     | '/list'
     | '/meals'
+    | '/recipes'
     | '/scan'
     | '/setup'
     | '/today'
@@ -137,6 +148,7 @@ export interface FileRouteTypes {
     | '/_authenticated/kitchen'
     | '/_authenticated/list'
     | '/_authenticated/meals'
+    | '/_authenticated/recipes'
     | '/_authenticated/scan'
     | '/_authenticated/setup'
     | '/_authenticated/today'
@@ -199,6 +211,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedMealsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/recipes': {
+      id: '/_authenticated/recipes'
+      path: '/recipes'
+      fullPath: '/recipes'
+      preLoaderRoute: typeof AuthenticatedRecipesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/scan': {
       id: '/_authenticated/scan'
       path: '/scan'
@@ -228,6 +247,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedKitchenRoute: typeof AuthenticatedKitchenRoute
   AuthenticatedListRoute: typeof AuthenticatedListRoute
   AuthenticatedMealsRoute: typeof AuthenticatedMealsRoute
+  AuthenticatedRecipesRoute: typeof AuthenticatedRecipesRoute
   AuthenticatedScanRoute: typeof AuthenticatedScanRoute
   AuthenticatedSetupRoute: typeof AuthenticatedSetupRoute
   AuthenticatedTodayRoute: typeof AuthenticatedTodayRoute
@@ -238,6 +258,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedKitchenRoute: AuthenticatedKitchenRoute,
   AuthenticatedListRoute: AuthenticatedListRoute,
   AuthenticatedMealsRoute: AuthenticatedMealsRoute,
+  AuthenticatedRecipesRoute: AuthenticatedRecipesRoute,
   AuthenticatedScanRoute: AuthenticatedScanRoute,
   AuthenticatedSetupRoute: AuthenticatedSetupRoute,
   AuthenticatedTodayRoute: AuthenticatedTodayRoute,

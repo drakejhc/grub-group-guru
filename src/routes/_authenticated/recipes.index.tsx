@@ -1,4 +1,4 @@
-import { Link, Outlet, createFileRoute, useRouterState } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Check, Heart, Plus, Search, X } from "lucide-react";
 import { toast } from "sonner";
@@ -22,7 +22,7 @@ import { useRankedRecipes, useRecipeActions } from "@/lib/recipe-actions";
 import { COMMON_EXTRAS, type RankedRecipe } from "@/lib/recipes";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/_authenticated/recipes")({
+export const Route = createFileRoute("/_authenticated/recipes/")({
   head: () => ({
     meta: [
       { title: "Recipes — Larder" },
@@ -41,9 +41,6 @@ export const Route = createFileRoute("/_authenticated/recipes")({
 });
 
 function RecipesLayout() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  // Detail page is a child route; render it alone.
-  if (pathname !== "/recipes" && pathname !== "/recipes/") return <Outlet />;
   return (
     <AppShell title="Recipes" subtitle="Cook with what you already have.">
       {(household) => <RecipesBody household={household} />}
