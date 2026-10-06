@@ -350,3 +350,72 @@ export function useMutate<TVars>(
     onSuccess: () => invalidate.forEach((k) => qc.invalidateQueries({ queryKey: [k] })),
   });
 }
+
+/* ---------------- shared helpers ---------------- */
+
+export function useMyProfile() {
+  const { userId } = useSession();
+  return useQuery({
+    queryKey: ["members", "me", userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, display_name, accent")
+        .eq("id", userId!)
+        .maybeSingle();
+      return (data as Profile | null) ?? null;
+    },
+  });
+}
+
+/**
+ * Adds items to the shared list, skipping anything already open on it.
+ * Returns which names were added and which were already there.
+ */
+export async function addToList(
+  householdId: string,
+  userId: string,
+  items: Array<{ name: string; quantity?: string | null; category: string; note?: string | null }>,
+) {
+  const { data: open, error: readError } = await supabase
+    .from("list_items")
+    .select("name")
+    .eq("household_id", householdId)
+    .eq("status", "open");
+  if (readError) throw readError;
+  const existing = (open ?? []).map((o) => o.name.trim().toLowerCase());
+  const seen = new Set(existing);
+  const fresh: typeof items = [];
+  const skipped: string[] = [];
+  for (const item of items) {
+    const key = item.name.trim().toLowerCase();
+    if (seen.has(key)) skipped.push(item.name);
+    else {
+      seen.add(key);
+      fresh.push(item);
+    }
+  }
+  if (fresh.length > 0) {
+    const { error } = await supabase.from("list_items").insert(
+      fresh.map((i) => ({
+        household_id: householdId,
+        name: i.name.trim(),
+        quantity: i.quantity ?? null,
+        category: i.category,
+        note: i.note ?? null,
+        requested_by: userId,
+      })),
+    );
+    if (error) throw error;
+  }
+  return { added: fresh.map((f) => f.name), skipped };
+}
+
+export function listToast(result: { added: string[]; skipped: string[] }) {
+  const { added, skipped } = result;
+  if (added.length === 0 && skipped.length > 0)
+    return skipped.length === 1 ? `${skipped[0]} is already on the list` : "Those are already on the list";
+  const head = added.length === 1 ? `${added[0]} added to the list` : `${added.length} things added to the list`;
+  return skipped.length > 0 ? `${head} · ${skipped.length} already there` : head;
+}
