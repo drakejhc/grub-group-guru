@@ -104,6 +104,7 @@ export function QuickAdd({ householdId }: { householdId: string }) {
           <form onSubmit={submit} className="space-y-3">
             <Input
               autoFocus
+              autoComplete="off"
               aria-label="Item"
               placeholder={mode === "kitchen" ? "Greek yoghurt" : "Milk"}
               value={name}

@@ -163,3 +163,12 @@
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-soft);
 }
+
+/* Removes the double-tap-zoom delay on controls. */
+button,
+a,
+summary,
+[role="button"],
+[role="radio"] {
+  touch-action: manipulation;
+}

@@ -175,6 +175,7 @@ function KitchenBody({ household }: { household: Household }) {
       >
         <Input
           id="kitchen-add"
+          autoComplete="off"
           aria-label={`Add something to the ${LOCATION_LABEL[tab].toLowerCase()}`}
           value={newItem}
           onChange={(e) => setNewItem(e.target.value)}

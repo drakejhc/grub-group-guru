@@ -136,12 +136,6 @@ function MealsBody({ household }: { household: Household }) {
 
   const cookMeal = useMutate(
     async ({ entry, status }: { entry: MealEntry; status: Record<string, UseStatus> }) => {
-      const { error } = await supabase
-        .from("meal_plan_entries")
-        .update({ cooked: true })
-        .eq("id", entry.id);
-      if (error) throw error;
-
       const usedUp = Object.keys(status).filter((id) => status[id] === "used");
       if (usedUp.length > 0) {
         const { error: usedError } = await supabase
@@ -159,6 +153,12 @@ function MealsBody({ household }: { household: Household }) {
           .eq("id", inv.id);
         if (partError) throw partError;
       }
+      // Last, so a failure above leaves the meal un-cooked and the dialog can simply be retried.
+      const { error } = await supabase
+        .from("meal_plan_entries")
+        .update({ cooked: true })
+        .eq("id", entry.id);
+      if (error) throw error;
     },
     ["meals", "inventory"],
     { errorMessage: "Couldn't update that" },

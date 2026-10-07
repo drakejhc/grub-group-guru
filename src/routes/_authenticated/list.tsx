@@ -174,7 +174,7 @@ function ListBody({ household }: { household: Household }) {
           className="h-1.5 overflow-hidden rounded-full bg-secondary"
         >
           <div
-            className="h-full rounded-full bg-primary transition-[width] duration-300"
+            className="h-full rounded-full bg-primary transition-[width] duration-300 motion-reduce:transition-none"
             style={{ width: `${(purchased.length / total) * 100}%` }}
           />
         </div>

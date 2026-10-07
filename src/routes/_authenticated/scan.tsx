@@ -198,7 +198,7 @@ function ScanBody({ household }: { household: Household }) {
                   <span
                     key={i}
                     className={cn(
-                      "h-1 w-10 rounded-full transition-colors",
+                      "h-1 w-10 rounded-full transition-colors motion-reduce:transition-none",
                       i <= (stage ?? 0) ? "bg-primary" : "bg-secondary",
                     )}
                   />
@@ -247,6 +247,7 @@ function ScanBody({ household }: { household: Household }) {
                     <div className="flex items-start gap-2">
                       <div className="min-w-0 flex-1 space-y-2">
                         <Input
+                          autoComplete="off"
                           aria-label={`Name of item ${index + 1}`}
                           value={item.name}
                           onChange={(e) => updateItem(index, { name: e.target.value })}
@@ -254,6 +255,7 @@ function ScanBody({ household }: { household: Household }) {
                         />
                         <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
                           <Input
+                            autoComplete="off"
                             aria-label={`Quantity of ${item.name}`}
                             placeholder="Amount"
                             value={item.quantity ?? ""}

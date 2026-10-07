@@ -35,7 +35,7 @@ export const Route = createFileRoute("/_authenticated/household")({
   }),
   component: () => (
     <AppShell title="Household" subtitle="Who's in it, and what you always buy.">
-      {(household) => <HouseholdBody household={household} />}
+      {(household) => <HouseholdBody key={household.id} household={household} />}
     </AppShell>
   ),
 });
@@ -65,6 +65,19 @@ function HouseholdBody({ household }: { household: Household }) {
     if (!userId) return null;
     return listToast(await addToList(household.id, userId, [staple]));
   }, ["list"]);
+
+  const [householdName, setHouseholdName] = useState(household.name);
+  const renameHousehold = useMutate(
+    async (value: string) => {
+      const { error } = await supabase
+        .from("households")
+        .update({ name: value.trim() })
+        .eq("id", household.id);
+      if (error) throw error;
+    },
+    ["households"],
+    { errorMessage: "Couldn't rename the household" },
+  );
 
   const rename = useMutate(async (value: string) => {
     const { error } = await supabase
@@ -132,6 +145,38 @@ function HouseholdBody({ household }: { household: Household }) {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="card-soft p-7">
+        <h2 className="text-xl">Household name</h2>
+        <form
+          className="mt-4 flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const value = householdName.trim();
+            if (!value || value === household.name) return;
+            renameHousehold.mutate(value, { onSuccess: () => toast.success("Household renamed") });
+          }}
+        >
+          <Input
+            aria-label="Household name"
+            autoComplete="off"
+            value={householdName}
+            onChange={(e) => setHouseholdName(e.target.value)}
+          />
+          <Button
+            type="submit"
+            variant="outline"
+            className="rounded-full px-5"
+            disabled={
+              renameHousehold.isPending ||
+              !householdName.trim() ||
+              householdName.trim() === household.name
+            }
+          >
+            Save
+          </Button>
+        </form>
       </section>
 
       <section className="card-soft p-7">
