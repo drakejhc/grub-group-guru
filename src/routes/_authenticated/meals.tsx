@@ -1,7 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { rankRecipes } from "@/lib/recipes";
 import { useMemo, useState } from "react";
-import { Check, Plus, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
@@ -17,16 +16,17 @@ import {
 
 import { supabase } from "@/integrations/supabase/client";
 import {
-  useInventory,
+  addToList,
+  listToast,
   useMealPlan,
   useMutate,
-  useRecipes,
   useSession,
   type Household,
   type MealEntry,
   type RecipeIngredient,
 } from "@/lib/data";
 import { dayNumber, matchesAny, shortDay, todayStr, weekDates } from "@/lib/food";
+import { useRankedRecipes } from "@/lib/recipe-actions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/meals")({
@@ -51,24 +51,37 @@ export const Route = createFileRoute("/_authenticated/meals")({
   ),
 });
 
+function weekLabel(offset: number, dates: string[]) {
+  if (offset === 0) return "This week";
+  if (offset === 1) return "Next week";
+  const first = new Date(dates[0]! + "T12:00:00");
+  return `Week of ${first.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`;
+}
+
 function MealsBody({ household }: { household: Household }) {
-  const dates = useMemo(() => weekDates(), []);
+  const [weekOffset, setWeekOffset] = useState(0);
+  const dates = useMemo(() => weekDates(weekOffset), [weekOffset]);
   const [selected, setSelected] = useState(() => {
     const today = todayStr();
     return dates.includes(today) ? today : dates[0]!;
   });
-  const { data: recipes = [] } = useRecipes(household.id);
-  const { data: inventory = [] } = useInventory(household.id);
+  const { ranked: allRanked, inventory } = useRankedRecipes(household.id);
   const { data: plan = [] } = useMealPlan(household.id, dates);
   const { userId } = useSession();
 
+  // Ranked against the kitchen *and* the basics ticked on the Recipes page, so counts agree there.
   const ranked = useMemo(
-    () =>
-      rankRecipes(recipes, inventory.map((i) => i.name))
-        .slice(0, 5)
-        .map((r) => ({ ...r, have: r.have.length })),
-    [recipes, inventory],
+    () => allRanked.slice(0, 5).map((r) => ({ ...r, have: r.have.length })),
+    [allRanked],
   );
+
+  function changeWeek(delta: number) {
+    const next = Math.max(0, weekOffset + delta);
+    const nextDates = weekDates(next);
+    const today = todayStr();
+    setWeekOffset(next);
+    setSelected(nextDates.includes(today) ? today : nextDates[0]!);
+  }
 
   const addMeal = useMutate(
     async ({ title, recipeId }: { title: string; recipeId: string | null }) => {
@@ -83,68 +96,106 @@ function MealsBody({ household }: { household: Household }) {
       if (error) throw error;
     },
     ["meals"],
+    { errorMessage: "Couldn't plan that" },
   );
 
-  const removeMeal = useMutate(async (id: string) => {
-    const { error } = await supabase.from("meal_plan_entries").delete().eq("id", id);
-    if (error) throw error;
-  }, ["meals"]);
+  const removeMeal = useMutate(
+    async (id: string) => {
+      const { error } = await supabase.from("meal_plan_entries").delete().eq("id", id);
+      if (error) throw error;
+    },
+    ["meals"],
+    { errorMessage: "Couldn't remove that" },
+  );
 
   const [cooking, setCooking] = useState<{ entry: MealEntry; use: string[] } | null>(null);
 
-  const cookCandidates = useMemo(() => {
-    if (!cooking?.entry.recipe_id) return [] as typeof inventory;
-    const recipe = recipes.find((r) => r.id === cooking.entry.recipe_id);
-    const ingredients = recipe?.recipe_ingredients ?? [];
+  /** Kitchen items that match an ingredient of the meal's recipe. */
+  function kitchenMatches(entry: MealEntry) {
+    const recipe = allRanked.find((r) => r.recipe.id === entry.recipe_id);
+    const ingredients = recipe?.ingredients ?? [];
     return inventory.filter((inv) => ingredients.some((ing) => matchesAny(ing.name, [inv.name])));
-  }, [cooking, recipes, inventory]);
-
-  const cookMeal = useMutate(async ({ entry, use }: { entry: MealEntry; use: string[] }) => {
-    const { error } = await supabase
-      .from("meal_plan_entries")
-      .update({ cooked: true })
-      .eq("id", entry.id);
-    if (error) throw error;
-    if (use.length > 0) {
-      await supabase.from("inventory_items").delete().in("id", use);
-    }
-  }, ["meals", "inventory"]);
-
-  function startCooking(entry: MealEntry) {
-    const recipe = recipes.find((r) => r.id === entry.recipe_id);
-    const ingredients = recipe?.recipe_ingredients ?? [];
-    const candidates = inventory.filter((inv) =>
-      ingredients.some((ing) => matchesAny(ing.name, [inv.name])),
-    );
-    setCooking({ entry, use: candidates.map((c) => c.id) });
   }
 
+  const cookCandidates = useMemo(
+    () => (cooking ? kitchenMatches(cooking.entry) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cooking?.entry, allRanked, inventory],
+  );
 
+  const cookMeal = useMutate(
+    async ({ entry, use }: { entry: MealEntry; use: string[] }) => {
+      const { error } = await supabase
+        .from("meal_plan_entries")
+        .update({ cooked: true })
+        .eq("id", entry.id);
+      if (error) throw error;
+      if (use.length > 0) {
+        const { error: usedError } = await supabase
+          .from("inventory_items")
+          .delete()
+          .in("id", use);
+        if (usedError) throw usedError;
+      }
+    },
+    ["meals", "inventory"],
+    { errorMessage: "Couldn't update that" },
+  );
 
-  const addMissing = useMutate(async (missing: RecipeIngredient[]) => {
-    if (!userId || missing.length === 0) return;
-    const { error } = await supabase.from("list_items").insert(
-      missing.map((ing) => ({
-        household_id: household.id,
-        name: ing.name,
-        quantity: ing.quantity,
-        category: ing.category,
-        requested_by: userId,
-      })),
-    );
-    if (error) throw error;
-  }, ["list"]);
+  function startCooking(entry: MealEntry) {
+    setCooking({ entry, use: kitchenMatches(entry).map((c) => c.id) });
+  }
+
+  const addMissing = useMutate(
+    async (missing: RecipeIngredient[]) => {
+      if (!userId || missing.length === 0) return null;
+      return listToast(
+        await addToList(
+          household.id,
+          userId,
+          missing.map((ing) => ({ name: ing.name, quantity: ing.quantity, category: ing.category })),
+        ),
+      );
+    },
+    ["list"],
+    { errorMessage: "Couldn't add those to the list" },
+  );
 
   const dayMeals = plan.filter((m) => m.plan_date === selected);
 
   return (
     <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="rounded-full"
+          disabled={weekOffset === 0}
+          onClick={() => changeWeek(-1)}
+          aria-label="Previous week"
+        >
+          <ChevronLeft className="size-4" aria-hidden />
+        </Button>
+        <p className="text-sm text-muted-foreground" aria-live="polite">
+          {weekLabel(weekOffset, dates)}
+        </p>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="rounded-full"
+          onClick={() => changeWeek(1)}
+          aria-label="Next week"
+        >
+          <ChevronRight className="size-4" aria-hidden />
+        </Button>
+      </div>
       <div className="flex gap-1.5 overflow-x-auto pb-1">
         {dates.map((date) => {
           const planned = plan.filter((m) => m.plan_date === date).length;
           return (
             <button
               key={date}
+              aria-pressed={selected === date}
               onClick={() => setSelected(date)}
               className={cn(
                 "flex min-w-14 flex-1 flex-col items-center rounded-2xl border border-border px-2 py-3 transition-colors",
@@ -190,7 +241,7 @@ function MealsBody({ household }: { household: Household }) {
                 {!meal.cooked && (
                   <button
                     onClick={() => startCooking(meal)}
-                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                    className="flex items-center gap-1 px-1 py-2 text-xs text-muted-foreground hover:text-foreground"
                   >
                     <Check className="size-3.5" aria-hidden /> cooked
                   </button>
@@ -199,7 +250,7 @@ function MealsBody({ household }: { household: Household }) {
                 <button
                   aria-label={`Remove ${meal.title}`}
                   onClick={() => removeMeal.mutate(meal.id)}
-                  className="text-muted-foreground hover:text-destructive"
+                  className="-mr-2 p-2 text-muted-foreground hover:text-destructive"
                 >
                   <X className="size-4" aria-hidden />
                 </button>
@@ -260,8 +311,7 @@ function MealsBody({ household }: { household: Household }) {
                   className="rounded-full"
                   onClick={() =>
                     addMissing.mutate(missing, {
-                      onSuccess: () =>
-                        toast.success(`${missing.length} things added to the list`),
+                      onSuccess: (message) => message && toast.success(message),
                     })
                   }
                 >
@@ -339,7 +389,6 @@ function MealsBody({ household }: { household: Household }) {
                     );
                     setCooking(null);
                   },
-                  onError: () => toast.error("Couldn't update that"),
                 });
               }}
             >

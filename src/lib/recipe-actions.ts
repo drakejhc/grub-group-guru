@@ -2,6 +2,8 @@ import { useMemo } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
+  addToList,
+  listToast,
   useFavourites,
   useInventory,
   useMutate,
@@ -64,17 +66,18 @@ export function useRecipeActions(householdId: string) {
   );
 
   const addMissing = useMutate(async (missing: RecipeIngredient[]) => {
-    if (!userId || missing.length === 0) return;
-    const { error } = await supabase.from("list_items").insert(
-      missing.map((ing) => ({
-        household_id: householdId,
-        name: ing.name,
-        quantity: ing.quantity,
-        category: ing.category,
-        requested_by: userId,
-      })),
+    if (!userId || missing.length === 0) return null;
+    return listToast(
+      await addToList(
+        householdId,
+        userId,
+        missing.map((ing) => ({
+          name: ing.name,
+          quantity: ing.quantity,
+          category: ing.category,
+        })),
+      ),
     );
-    if (error) throw error;
   }, ["list"]);
 
   const plan = useMutate(

@@ -7,10 +7,11 @@ import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { extractReceipt, type ExtractedItem } from "@/lib/receipt.functions";
 import { recordStaplePurchases, useSession, type Household } from "@/lib/data";
-import { LOCATION_LABEL, addDays, matchesAny, type StorageLocation } from "@/lib/food";
+import { LOCATIONS, LOCATION_LABEL, addDays, matchesAny, type StorageLocation } from "@/lib/food";
 
 import { cn } from "@/lib/utils";
 
@@ -70,13 +71,20 @@ function ScanBody({ household }: { household: Household }) {
   }
 
 
+  function updateItem(index: number, patch: Partial<ExtractedItem>) {
+    setItems((current) =>
+      current ? current.map((item, i) => (i === index ? { ...item, ...patch } : item)) : current,
+    );
+  }
+
   async function save() {
-    if (!items || items.length === 0) return;
+    const kept = items?.filter((i) => i.name.trim()) ?? [];
+    if (kept.length === 0 || saving) return;
     setSaving(true);
     try {
-      const rows = items.map((item) => ({
+      const rows = kept.map((item) => ({
         household_id: household.id,
-        name: item.name,
+        name: item.name.trim(),
         quantity: item.quantity ?? null,
         category: item.category,
         location: item.location,
@@ -86,7 +94,7 @@ function ScanBody({ household }: { household: Household }) {
       const { error } = await supabase.from("inventory_items").insert(rows);
       if (error) throw error;
 
-      const names = items.map((i) => i.name);
+      const names = kept.map((i) => i.name);
       const { data: openItems } = await supabase
         .from("list_items")
         .select("id, name")
@@ -94,13 +102,14 @@ function ScanBody({ household }: { household: Household }) {
         .eq("status", "open");
       const matched = (openItems ?? []).filter((li) => matchesAny(li.name, names));
       if (matched.length > 0) {
-        await supabase
+        const { error: tickError } = await supabase
           .from("list_items")
           .delete()
           .in(
             "id",
             matched.map((m) => m.id),
           );
+        if (tickError) throw tickError;
       }
       await recordStaplePurchases(household.id, names);
 
@@ -108,8 +117,8 @@ function ScanBody({ household }: { household: Household }) {
       await qc.invalidateQueries();
       toast.success(
         matched.length > 0
-          ? `${items.length} items put away, ${matched.length} ticked off the list`
-          : `${items.length} items put away`,
+          ? `${kept.length} items put away, ${matched.length} ticked off the list`
+          : `${kept.length} items put away`,
       );
       navigate({ to: "/kitchen" });
     } catch {
@@ -161,7 +170,7 @@ function ScanBody({ household }: { household: Household }) {
         <>
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-muted-foreground">
-              {items.length} items found. Remove anything that's wrong.
+              {items.length} items found. Fix any names or places that are wrong, or remove them.
             </p>
             <Button
               size="sm"
@@ -177,20 +186,36 @@ function ScanBody({ household }: { household: Household }) {
             <ul>
               {items.map((item, index) => (
                 <li
-                  key={`${item.name}-${index}`}
+                  key={index}
                   className="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-0"
                 >
-                  <div className="flex-1">
-                    <p>{item.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {LOCATION_LABEL[item.location as StorageLocation] ?? "Pantry"} ·{" "}
-                      {Math.max(1, Math.round(item.shelf_life_days || 7))} days
-                    </p>
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <Input
+                      aria-label={`Name of ${item.name}`}
+                      value={item.name}
+                      onChange={(e) => updateItem(index, { name: e.target.value })}
+                      className="h-9"
+                    />
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <select
+                        aria-label={`Where ${item.name} is kept`}
+                        value={item.location}
+                        onChange={(e) => updateItem(index, { location: e.target.value })}
+                        className="rounded-md border border-border bg-background px-2 py-1"
+                      >
+                        {LOCATIONS.map((l) => (
+                          <option key={l} value={l}>
+                            {LOCATION_LABEL[l]}
+                          </option>
+                        ))}
+                      </select>
+                      <span>keeps ~{Math.max(1, Math.round(item.shelf_life_days || 7))} days</span>
+                    </div>
                   </div>
                   <button
                     aria-label={`Remove ${item.name}`}
                     onClick={() => setItems(items.filter((_, i) => i !== index))}
-                    className="text-muted-foreground hover:text-destructive"
+                    className="-mr-2 p-2 text-muted-foreground hover:text-destructive"
                   >
                     <X className="size-4" aria-hidden />
                   </button>

@@ -1,13 +1,23 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Camera, Trash2 } from "lucide-react";
+import { Camera, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  addToList,
+  listToast,
   useInventory,
   useMutate,
   useSession,
@@ -54,35 +64,78 @@ function KitchenBody({ household }: { household: Household }) {
   const [tab, setTab] = useState<StorageLocation>("fridge");
   const [newItem, setNewItem] = useState("");
 
-  const add = useMutate(async (name: string) => {
-    const category = guessCategory(name);
-    const storage = defaultStorage(category);
-    const { error } = await supabase.from("inventory_items").insert({
-      household_id: household.id,
-      name: name.trim(),
-      category,
-      location: tab,
-      expires_on: addDays(storage.days),
-      added_by: userId,
-    });
-    if (error) throw error;
-  }, ["inventory"]);
+  const add = useMutate(
+    async (name: string) => {
+      const category = guessCategory(name);
+      const storage = defaultStorage(category);
+      const { error } = await supabase.from("inventory_items").insert({
+        household_id: household.id,
+        name: name.trim(),
+        category,
+        location: tab,
+        expires_on: addDays(storage.days),
+        added_by: userId,
+      });
+      if (error) throw error;
+    },
+    ["inventory"],
+    { errorMessage: "Couldn't add that" },
+  );
 
-  const remove = useMutate(async (id: string) => {
-    const { error } = await supabase.from("inventory_items").delete().eq("id", id);
-    if (error) throw error;
-  }, ["inventory"]);
+  const remove = useMutate(
+    async (id: string) => {
+      const { error } = await supabase.from("inventory_items").delete().eq("id", id);
+      if (error) throw error;
+    },
+    ["inventory"],
+    { errorMessage: "Couldn't remove that" },
+  );
 
-  const toList = useMutate(async (item: InventoryItem) => {
-    if (!userId) return;
-    const { error } = await supabase.from("list_items").insert({
-      household_id: household.id,
-      name: item.name,
-      category: item.category,
-      requested_by: userId,
-    });
-    if (error) throw error;
-  }, ["list"]);
+  const restore = useMutate(
+    async (item: InventoryItem) => {
+      const { error } = await supabase.from("inventory_items").insert({
+        household_id: item.household_id,
+        name: item.name,
+        quantity: item.quantity,
+        location: item.location,
+        category: item.category,
+        expires_on: item.expires_on,
+        added_by: item.added_by,
+      });
+      if (error) throw error;
+    },
+    ["inventory"],
+    { errorMessage: "Couldn't bring that back" },
+  );
+
+  const update = useMutate(
+    async (patch: {
+      id: string;
+      name: string;
+      quantity: string | null;
+      location: StorageLocation;
+      expires_on: string | null;
+    }) => {
+      const { id, ...fields } = patch;
+      const { error } = await supabase.from("inventory_items").update(fields).eq("id", id);
+      if (error) throw error;
+    },
+    ["inventory"],
+    { errorMessage: "Couldn't save those changes" },
+  );
+
+  const toList = useMutate(
+    async (item: InventoryItem) => {
+      if (!userId) return null;
+      return listToast(
+        await addToList(household.id, userId, [{ name: item.name, category: item.category }]),
+      );
+    },
+    ["list"],
+    { errorMessage: "Couldn't add that to the list" },
+  );
+
+  const [editing, setEditing] = useState<InventoryItem | null>(null);
 
   const visible = items.filter((i) => i.location === tab);
 
@@ -92,6 +145,7 @@ function KitchenBody({ household }: { household: Household }) {
         {LOCATIONS.map((loc) => (
           <button
             key={loc}
+            aria-pressed={tab === loc}
             onClick={() => setTab(loc)}
             className={cn(
               "rounded-full px-4 py-1.5 text-sm transition-colors",
@@ -116,10 +170,7 @@ function KitchenBody({ household }: { household: Household }) {
         onSubmit={(e) => {
           e.preventDefault();
           if (!newItem.trim()) return;
-          add.mutate(newItem.trim(), {
-            onSuccess: () => setNewItem(""),
-            onError: () => toast.error("Couldn't add that"),
-          });
+          add.mutate(newItem.trim(), { onSuccess: () => setNewItem("") });
         }}
       >
         <Input
@@ -173,17 +224,31 @@ function KitchenBody({ household }: { household: Household }) {
                   <button
                     onClick={() =>
                       toList.mutate(item, {
-                        onSuccess: () => toast.success(`${item.name} added to the list`),
+                        onSuccess: (message) => message && toast.success(message),
                       })
                     }
-                    className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                    className="px-1 py-2 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                   >
                     Need more
                   </button>
                   <button
+                    aria-label={`Edit ${item.name}`}
+                    onClick={() => setEditing(item)}
+                    className="p-2 text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <Pencil className="size-4" aria-hidden />
+                  </button>
+                  <button
                     aria-label={`Remove ${item.name}`}
-                    onClick={() => remove.mutate(item.id)}
-                    className="text-muted-foreground transition-colors hover:text-destructive"
+                    onClick={() =>
+                      remove.mutate(item.id, {
+                        onSuccess: () =>
+                          toast(`${item.name} removed`, {
+                            action: { label: "Undo", onClick: () => restore.mutate(item) },
+                          }),
+                      })
+                    }
+                    className="-mr-2 p-2 text-muted-foreground transition-colors hover:text-destructive"
                   >
                     <Trash2 className="size-4" aria-hidden />
                   </button>
@@ -193,6 +258,120 @@ function KitchenBody({ household }: { household: Household }) {
           </ul>
         </section>
       )}
+
+      <EditDialog
+        item={editing}
+        onClose={() => setEditing(null)}
+        onSave={(patch) => update.mutate(patch, { onSuccess: () => setEditing(null) })}
+        saving={update.isPending}
+      />
     </div>
+  );
+}
+
+function EditDialog({
+  item,
+  onClose,
+  onSave,
+  saving,
+}: {
+  item: InventoryItem | null;
+  onClose: () => void;
+  onSave: (patch: {
+    id: string;
+    name: string;
+    quantity: string | null;
+    location: StorageLocation;
+    expires_on: string | null;
+  }) => void;
+  saving: boolean;
+}) {
+  return (
+    <Dialog open={!!item} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        {item && <EditForm key={item.id} item={item} onSave={onSave} saving={saving} />}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditForm({
+  item,
+  onSave,
+  saving,
+}: {
+  item: InventoryItem;
+  onSave: (patch: {
+    id: string;
+    name: string;
+    quantity: string | null;
+    location: StorageLocation;
+    expires_on: string | null;
+  }) => void;
+  saving: boolean;
+}) {
+  const [name, setName] = useState(item.name);
+  const [quantity, setQuantity] = useState(item.quantity ?? "");
+  const [location, setLocation] = useState(item.location as StorageLocation);
+  const [expires, setExpires] = useState(item.expires_on ?? "");
+
+  return (
+    <form
+      className="space-y-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!name.trim()) return;
+        onSave({
+          id: item.id,
+          name: name.trim(),
+          quantity: quantity.trim() || null,
+          location,
+          expires_on: expires || null,
+        });
+      }}
+    >
+      <DialogHeader>
+        <DialogTitle>Edit {item.name}</DialogTitle>
+        <DialogDescription>Fix the amount, where it lives, or how long it keeps.</DialogDescription>
+      </DialogHeader>
+      <Input aria-label="Name" value={name} onChange={(e) => setName(e.target.value)} />
+      <Input
+        aria-label="Quantity"
+        placeholder="How much? (optional)"
+        value={quantity}
+        onChange={(e) => setQuantity(e.target.value)}
+      />
+      <div className="flex gap-1.5" role="radiogroup" aria-label="Where it's kept">
+        {LOCATIONS.map((l) => (
+          <button
+            type="button"
+            key={l}
+            role="radio"
+            aria-checked={location === l}
+            onClick={() => setLocation(l)}
+            className={cn(
+              "flex-1 rounded-full border border-border py-2 text-sm transition-colors",
+              location === l ? "border-primary bg-primary text-primary-foreground" : "hover:bg-secondary",
+            )}
+          >
+            {LOCATION_LABEL[l]}
+          </button>
+        ))}
+      </div>
+      <label className="block text-xs text-muted-foreground">
+        Use by
+        <Input
+          type="date"
+          value={expires}
+          onChange={(e) => setExpires(e.target.value)}
+          className="mt-1"
+        />
+      </label>
+      <DialogFooter>
+        <Button type="submit" className="rounded-full" disabled={!name.trim() || saving}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
+      </DialogFooter>
+    </form>
   );
 }

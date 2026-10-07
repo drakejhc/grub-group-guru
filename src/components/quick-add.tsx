@@ -59,7 +59,7 @@ export function QuickAdd({ householdId }: { householdId: string }) {
     });
     if (error) throw error;
     return `${name.trim()} added to the ${LOCATION_LABEL[loc].toLowerCase()}`;
-  }, ["list", "inventory"]);
+  }, ["list", "inventory"], { errorMessage: "Couldn't add that just now — try again" });
 
   function reset() {
     setName("");
@@ -76,7 +76,6 @@ export function QuickAdd({ householdId }: { householdId: string }) {
         reset();
         setOpen(false);
       },
-      onError: () => toast.error("Couldn't add that just now — try again"),
     });
   }
 

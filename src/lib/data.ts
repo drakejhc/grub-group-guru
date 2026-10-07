@@ -1,7 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
+import { todayStr } from "@/lib/food";
 
 export type Profile = { id: string; display_name: string; accent: string };
 
@@ -117,13 +119,45 @@ export function useHouseholds() {
   });
 }
 
+/* The active household is shared by every component (shell, layout, realtime), so it lives in a
+   tiny external store rather than per-hook state. */
+const activeListeners = new Set<() => void>();
+
+function readActiveId(): string | null {
+  try {
+    return window.localStorage.getItem(ACTIVE_HOUSEHOLD_KEY);
+  } catch {
+    return null;
+  }
+}
+
+let activeId: string | null | undefined;
+
+function getActiveId() {
+  if (activeId === undefined) activeId = readActiveId();
+  return activeId;
+}
+
+function setActiveId(id: string) {
+  activeId = id;
+  try {
+    window.localStorage.setItem(ACTIVE_HOUSEHOLD_KEY, id);
+  } catch {
+    // Private mode: the switch still applies for this session.
+  }
+  activeListeners.forEach((l) => l());
+}
+
+function subscribeActive(listener: () => void) {
+  activeListeners.add(listener);
+  return () => {
+    activeListeners.delete(listener);
+  };
+}
+
 export function useHousehold() {
   const query = useHouseholds();
-  const [activeId, setActiveId] = useState<string | null>(null);
-
-  useEffect(() => {
-    setActiveId(window.localStorage.getItem(ACTIVE_HOUSEHOLD_KEY));
-  }, []);
+  const activeId = useSyncExternalStore(subscribeActive, getActiveId, () => null);
 
   const households = query.data ?? [];
   const active = households.find((h) => h.id === activeId) ?? households[0] ?? null;
@@ -133,13 +167,9 @@ export function useHousehold() {
     isLoading: query.isLoading,
     isError: query.isError,
     households,
-    setActive: (id: string) => {
-      window.localStorage.setItem(ACTIVE_HOUSEHOLD_KEY, id);
-      setActiveId(id);
-    },
+    setActive: setActiveId,
   };
 }
-
 
 export function useMembers(householdId: string | undefined) {
   return useQuery({
@@ -328,7 +358,7 @@ export async function recordStaplePurchases(householdId: string, names: string[]
   if (ids.length === 0) return;
   await supabase
     .from("staples")
-    .update({ last_purchased_on: new Date().toISOString().slice(0, 10) })
+    .update({ last_purchased_on: todayStr() })
     .in("id", ids);
 }
 
@@ -340,14 +370,38 @@ export function useInvalidate() {
 }
 
 
-export function useMutate<TVars>(
-  fn: (vars: TVars) => Promise<unknown>,
+type MutateOptions<TVars, TCache> = {
+  /** Shown if the mutation fails. Every failure is reported — nothing fails silently. */
+  errorMessage?: string;
+  /** Applies the change to cached data immediately and rolls back if the request fails. */
+  optimistic?: { queryKey: QueryKey; apply: (current: TCache, vars: TVars) => TCache };
+};
+
+export function useMutate<TVars, TResult = unknown, TCache = unknown>(
+  fn: (vars: TVars) => Promise<TResult>,
   invalidate: string[],
+  options: MutateOptions<TVars, TCache> = {},
 ) {
   const qc = useQueryClient();
+  const { optimistic, errorMessage = "That didn't save — check your connection and try again." } =
+    options;
   return useMutation({
     mutationFn: fn,
-    onSuccess: () => invalidate.forEach((k) => qc.invalidateQueries({ queryKey: [k] })),
+    onMutate: async (vars: TVars) => {
+      if (!optimistic) return undefined;
+      await qc.cancelQueries({ queryKey: optimistic.queryKey });
+      const previous = qc.getQueryData<TCache>(optimistic.queryKey);
+      qc.setQueryData<TCache>(optimistic.queryKey, (current) =>
+        current === undefined ? current : optimistic.apply(current, vars),
+      );
+      return { previous };
+    },
+    onError: (error, _vars, context) => {
+      console.error(error);
+      if (optimistic && context) qc.setQueryData(optimistic.queryKey, context.previous);
+      toast.error(errorMessage);
+    },
+    onSettled: () => invalidate.forEach((k) => qc.invalidateQueries({ queryKey: [k] })),
   });
 }
 

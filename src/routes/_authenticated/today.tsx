@@ -1,17 +1,24 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, Camera } from "lucide-react";
+import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
+  addToList,
+  listToast,
   useInventory,
   useListItems,
   useMealPlan,
   useMembers,
+  useMutate,
+  useSession,
   useStaples,
   type Household,
 } from "@/lib/data";
-import { daysUntil, freshnessLabel, stapleDue, todayStr, weekDates } from "@/lib/food";
+import { daysUntil, freshnessLabel, matchesAny, stapleDue, todayStr, weekDates } from "@/lib/food";
+import { useRankedRecipes } from "@/lib/recipe-actions";
 
 export const Route = createFileRoute("/_authenticated/today")({
   head: () => ({
@@ -49,6 +56,17 @@ function TodayBody({ household }: { household: Household }) {
   const members = useMembers(household.id);
   const dates = weekDates();
   const meals = useMealPlan(household.id, dates);
+  const { ranked } = useRankedRecipes(household.id);
+  const { userId } = useSession();
+
+  const staplesToList = useMutate(
+    async (staple: { name: string; category: string }) => {
+      if (!userId) return null;
+      return listToast(await addToList(household.id, userId, [staple]));
+    },
+    ["list"],
+    { errorMessage: "Couldn't add that to the list" },
+  );
 
   const open = (list.data ?? []).filter((i) => i.status === "open");
   const expiring = (inventory.data ?? [])
@@ -61,6 +79,25 @@ function TodayBody({ household }: { household: Household }) {
 
   const today = todayStr();
   const tonight = (meals.data ?? []).find((m) => m.plan_date === today);
+
+  // The best-ranked recipe that actually uses something about to go off.
+  const expiringNames = expiring.map((i) => i.name);
+  const useItUp = ranked.find(({ ingredients }) =>
+    ingredients.some((ing) => matchesAny(ing.name, expiringNames)),
+  );
+  const useItUpItems = useItUp
+    ? expiring.filter((item) => useItUp.ingredients.some((ing) => matchesAny(ing.name, [item.name])))
+    : [];
+
+  if (list.isLoading || inventory.isLoading) {
+    return (
+      <div className="space-y-4" aria-label="Loading">
+        <Skeleton className="h-48 rounded-3xl" />
+        <Skeleton className="h-28 rounded-3xl" />
+        <Skeleton className="h-36 rounded-3xl" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -90,7 +127,18 @@ function TodayBody({ household }: { household: Household }) {
         <h2 className="text-xl">Tonight</h2>
         {tonight ? (
           <p className="mt-2 text-muted-foreground">
-            <span className="text-foreground">{tonight.title}</span> is planned for dinner.
+            {tonight.recipe_id ? (
+              <Link
+                to="/recipes/$id"
+                params={{ id: tonight.recipe_id }}
+                className="text-foreground underline-offset-4 hover:underline"
+              >
+                {tonight.title}
+              </Link>
+            ) : (
+              <span className="text-foreground">{tonight.title}</span>
+            )}{" "}
+            {tonight.cooked ? "was cooked tonight." : "is planned for dinner."}
           </p>
         ) : (
           <p className="mt-2 text-sm text-muted-foreground">
@@ -118,6 +166,20 @@ function TodayBody({ household }: { household: Household }) {
             ))}
           </ul>
         )}
+        {useItUp && (
+          <p className="mt-4 rounded-2xl bg-secondary px-4 py-3 text-sm">
+            Try{" "}
+            <Link
+              to="/recipes/$id"
+              params={{ id: useItUp.recipe.id }}
+              className="font-medium underline-offset-4 hover:underline"
+            >
+              {useItUp.recipe.title}
+            </Link>{" "}
+            — uses {useItUpItems.map((i) => i.name.toLowerCase()).join(", ")}
+            {useItUp.missing.length > 0 && `, needs ${useItUp.missing.length} more`}.
+          </p>
+        )}
         <Button asChild size="sm" variant="ghost" className="mt-4 -ml-3 rounded-full">
           <Link to="/kitchen">See the kitchen</Link>
         </Button>
@@ -127,15 +189,22 @@ function TodayBody({ household }: { household: Household }) {
         <section className="card-soft p-7">
           <h2 className="text-xl">Probably running low</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Based on how often you normally buy these.
+            Based on how often you normally buy these. Tap one to add it to the list.
           </p>
           <ul className="mt-4 flex flex-wrap gap-2">
             {dueStaples.map((s) => (
-              <li
-                key={s.id}
-                className="rounded-full bg-secondary px-3.5 py-1.5 text-sm text-secondary-foreground"
-              >
-                {s.name}
+              <li key={s.id}>
+                <button
+                  onClick={() =>
+                    staplesToList.mutate(s, {
+                      onSuccess: (message) => message && toast.success(message),
+                    })
+                  }
+                  aria-label={`Add ${s.name} to the list`}
+                  className="rounded-full bg-secondary px-3.5 py-2 text-sm text-secondary-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {s.name} <span aria-hidden>+</span>
+                </button>
               </li>
             ))}
           </ul>

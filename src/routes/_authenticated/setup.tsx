@@ -4,12 +4,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { useEnsureProfile } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/lib/data";
+import { todayStr } from "@/lib/food";
 import { joinHouseholdByCode } from "@/lib/household.functions";
 
 
@@ -34,7 +34,6 @@ const STARTER_STAPLES = [
 ];
 
 function Setup() {
-  useEnsureProfile();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { userId } = useSession();
@@ -68,7 +67,7 @@ function Setup() {
           .from("household_invites")
           .insert({ code: created.invite_code, household_id: householdId });
       }
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayStr();
       await supabase
         .from("staples")
         .insert(

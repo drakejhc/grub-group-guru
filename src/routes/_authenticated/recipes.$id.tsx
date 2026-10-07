@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import type { Household } from "@/lib/data";
-import { shortDay, todayStr, weekDates } from "@/lib/food";
+import { shortDay, todayStr, upcomingDates } from "@/lib/food";
 import { useRankedRecipes, useRecipeActions } from "@/lib/recipe-actions";
 import { cn } from "@/lib/utils";
 
@@ -32,7 +32,7 @@ function RecipePage() {
 function RecipeDetail({ household, id }: { household: Household; id: string }) {
   const { ranked, favourites, isLoading } = useRankedRecipes(household.id);
   const { toggleFavourite, addMissing, plan } = useRecipeActions(household.id);
-  const dates = useMemo(() => weekDates().filter((d) => d >= todayStr()), []);
+  const dates = useMemo(() => upcomingDates(), []);
   const [date, setDate] = useState(() => dates[0] ?? todayStr());
   const item = ranked.find((r) => r.recipe.id === id);
 
@@ -79,6 +79,7 @@ function RecipeDetail({ household, id }: { household: Household; id: string }) {
             {dates.map((d) => (
               <button
                 key={d}
+                aria-pressed={d === date}
                 onClick={() => setDate(d)}
                 className={cn(
                   "rounded-full border border-border px-3 py-1 text-xs",
@@ -95,7 +96,7 @@ function RecipeDetail({ household, id }: { household: Household; id: string }) {
             onClick={() =>
               plan.mutate(
                 { recipeId: recipe.id, title: recipe.title, date },
-                { onSuccess: () => toast.success(`Planned for ${shortDay(date)}`), onError: () => toast.error("Couldn't plan that") },
+                { onSuccess: () => toast.success(`Planned for ${shortDay(date)}`) },
               )
             }
           >
@@ -108,8 +109,7 @@ function RecipeDetail({ household, id }: { household: Household; id: string }) {
               className="rounded-full"
               onClick={() =>
                 addMissing.mutate(missing, {
-                  onSuccess: () => toast.success(`${missing.length} added to the list`),
-                  onError: () => toast.error("Couldn't add those"),
+                  onSuccess: (message) => message && toast.success(message),
                 })
               }
             >

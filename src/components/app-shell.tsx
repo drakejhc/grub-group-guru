@@ -26,7 +26,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import {
   useHousehold,
-  useHouseholdRealtime,
   useListItems,
   useMyProfile,
   useSession,
@@ -77,14 +76,12 @@ export function AppShell({
   action?: ReactNode;
   eyebrow?: ReactNode;
 }) {
-  useEnsureProfile();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { data: household, isLoading, isError, households, setActive } = useHousehold();
   const { data: me } = useMyProfile();
   const { data: list = [] } = useListItems(household?.id);
-  useHouseholdRealtime(household?.id);
   const toBuy = list.filter((i) => i.status === "open").length;
 
   useEffect(() => {

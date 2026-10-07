@@ -7,7 +7,15 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import { useMembers, useMutate, useSession, useStaples, type Household } from "@/lib/data";
+import {
+  addToList,
+  listToast,
+  useMembers,
+  useMutate,
+  useSession,
+  useStaples,
+  type Household,
+} from "@/lib/data";
 import { daysUntil, guessCategory, stapleDue } from "@/lib/food";
 
 export const Route = createFileRoute("/_authenticated/household")({
@@ -54,14 +62,8 @@ function HouseholdBody({ household }: { household: Household }) {
   }, ["staples"]);
 
   const stapleToList = useMutate(async (staple: { name: string; category: string }) => {
-    if (!userId) return;
-    const { error } = await supabase.from("list_items").insert({
-      household_id: household.id,
-      name: staple.name,
-      category: staple.category,
-      requested_by: userId,
-    });
-    if (error) throw error;
+    if (!userId) return null;
+    return listToast(await addToList(household.id, userId, [staple]));
   }, ["list"]);
 
   const rename = useMutate(async (value: string) => {
@@ -179,7 +181,7 @@ function HouseholdBody({ household }: { household: Household }) {
                 <button
                   onClick={() =>
                     stapleToList.mutate(staple, {
-                      onSuccess: () => toast.success(`${staple.name} added to the list`),
+                      onSuccess: (message) => message && toast.success(message),
                     })
                   }
                   className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"

@@ -50,21 +50,45 @@ function ListBody({ household }: { household: Household }) {
   const open = items.filter((i) => i.status === "open");
   const purchased = items.filter((i) => i.status === "purchased");
 
-  const toggle = useMutate(async (item: ListItem) => {
-    const { error } = await supabase
-      .from("list_items")
-      .update({
-        status: item.status === "open" ? "purchased" : "open",
-        purchased_at: item.status === "open" ? new Date().toISOString() : null,
-      })
-      .eq("id", item.id);
-    if (error) throw error;
-  }, ["list"]);
+  // Optimistic: in a shop with patchy signal the tick must land instantly, and roll back on failure.
+  const toggle = useMutate(
+    async (item: ListItem) => {
+      const { error } = await supabase
+        .from("list_items")
+        .update({
+          status: item.status === "open" ? "purchased" : "open",
+          purchased_at: item.status === "open" ? new Date().toISOString() : null,
+        })
+        .eq("id", item.id);
+      if (error) throw error;
+    },
+    ["list"],
+    {
+      errorMessage: "Couldn't tick that off — try again",
+      optimistic: {
+        queryKey: ["list", household.id],
+        apply: (current: ListItem[], item) =>
+          current.map((i) =>
+            i.id === item.id
+              ? {
+                  ...i,
+                  status: item.status === "open" ? "purchased" : "open",
+                  purchased_at: item.status === "open" ? new Date().toISOString() : null,
+                }
+              : i,
+          ),
+      },
+    },
+  );
 
-  const remove = useMutate(async (id: string) => {
-    const { error } = await supabase.from("list_items").delete().eq("id", id);
-    if (error) throw error;
-  }, ["list"]);
+  const remove = useMutate(
+    async (id: string) => {
+      const { error } = await supabase.from("list_items").delete().eq("id", id);
+      if (error) throw error;
+    },
+    ["list"],
+    { errorMessage: "Couldn't remove that" },
+  );
 
   const restore = useMutate(async (item: ListItem) => {
     const { error } = await supabase.from("list_items").insert({
@@ -79,7 +103,7 @@ function ListBody({ household }: { household: Household }) {
     if (error) throw error;
   }, ["list"]);
 
-  const putAway = useMutate(async () => {
+  const putAway = useMutate(async (_: void) => {
     if (purchased.length === 0) return;
     const rows = purchased.map((item) => {
       const storage = defaultStorage(item.category as Category);
@@ -107,9 +131,7 @@ function ListBody({ household }: { household: Household }) {
       household.id,
       purchased.map((p) => p.name),
     );
-  }, ["list", "inventory", "staples"]);
-
-  const pendingId = toggle.isPending ? (toggle.variables as ListItem | undefined)?.id : null;
+  }, ["list", "inventory", "staples"], { errorMessage: "Couldn't put that away" });
 
   const nameOf = (id: string) => members.find((m) => m.id === id)?.display_name ?? "Someone";
 
@@ -161,21 +183,14 @@ function ListBody({ household }: { household: Household }) {
                   aria-label={`Mark ${item.name} as bought`}
                   onClick={() => toggle.mutate(item)}
                   className={cn(
-                    "my-1 flex size-7 shrink-0 items-center justify-center rounded-full border border-border transition-colors hover:border-primary",
-                    shopping && "size-9",
-                    pendingId === item.id && "border-primary bg-primary text-primary-foreground",
+                    "my-1 flex size-7 shrink-0 items-center justify-center rounded-full border border-border transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    shopping && "size-10",
                   )}
                 >
-                  <Check
-                    className={cn(
-                      "size-4",
-                      pendingId === item.id ? "text-primary-foreground" : "text-transparent",
-                    )}
-                    aria-hidden
-                  />
+                  <Check className="size-4 text-transparent" aria-hidden />
                 </button>
                 <div className={cn("flex-1 py-3", shopping && "py-4")}>
-                  <p className={cn(shopping && "text-lg", pendingId === item.id && "text-muted-foreground line-through")}>
+                  <p className={cn(shopping && "text-lg")}>
                     {item.name}
                     {item.quantity && (
                       <span className="ml-2 text-muted-foreground">{item.quantity}</span>
@@ -196,9 +211,8 @@ function ListBody({ household }: { household: Household }) {
                         }),
                     })
                   }
-                  className="text-muted-foreground transition-colors hover:text-destructive"
+                  className="-mr-2 p-2 text-muted-foreground transition-colors hover:text-destructive"
                 >
-
                   <Trash2 className="size-4" aria-hidden />
                 </button>
               </li>
@@ -229,10 +243,10 @@ function ListBody({ household }: { household: Household }) {
           </ul>
           <Button
             className="mt-5 w-full rounded-full"
+            disabled={putAway.isPending}
             onClick={() =>
-              putAway.mutate(undefined as never, {
+              putAway.mutate(undefined, {
                 onSuccess: () => toast.success("Shopping put away in your kitchen"),
-                onError: () => toast.error("Couldn't put that away"),
               })
             }
           >

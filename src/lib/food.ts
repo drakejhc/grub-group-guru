@@ -74,10 +74,17 @@ export function defaultStorage(category: Category) {
   return SHELF_LIFE[category] ?? SHELF_LIFE.other;
 }
 
+/** YYYY-MM-DD in the user's local timezone (toISOString would give the UTC date). */
+export function localDateStr(d: Date = new Date()): string {
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
 export function addDays(days: number, from = new Date()): string {
   const d = new Date(from);
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return localDateStr(d);
 }
 
 export function daysUntil(dateStr: string | null): number | null {
@@ -175,8 +182,13 @@ export function weekDates(offsetWeeks = 0): string[] {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(base);
     d.setDate(base.getDate() + i);
-    return d.toISOString().slice(0, 10);
+    return localDateStr(d);
   });
+}
+
+/** Today and the following days, so planning from a recipe still works late in the week. */
+export function upcomingDates(count = 7): string[] {
+  return Array.from({ length: count }, (_, i) => addDays(i));
 }
 
 export function shortDay(dateStr: string): string {
@@ -188,5 +200,5 @@ export function dayNumber(dateStr: string): string {
 }
 
 export function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localDateStr();
 }
