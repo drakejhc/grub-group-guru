@@ -143,11 +143,15 @@ function ListBody({ household }: { household: Household }) {
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading the list…</p>;
 
+  const total = open.length + purchased.length;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          {open.length} to buy{purchased.length > 0 && ` · ${purchased.length} in the basket`}
+        <p className="text-sm text-muted-foreground" aria-live="polite">
+          {total === 0
+            ? "Nothing to buy"
+            : `${purchased.length} of ${total} bought${open.length > 0 ? ` · ${open.length} to go` : ""}`}
         </p>
         <Button
           size="sm"
@@ -160,10 +164,37 @@ function ListBody({ household }: { household: Household }) {
         </Button>
       </div>
 
+      {total > 0 && (
+        <div
+          role="progressbar"
+          aria-label="Shopping progress"
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-valuenow={purchased.length}
+          className="h-1.5 overflow-hidden rounded-full bg-secondary"
+        >
+          <div
+            className="h-full rounded-full bg-primary transition-[width] duration-300"
+            style={{ width: `${(purchased.length / total) * 100}%` }}
+          />
+        </div>
+      )}
+
+      {open.length === 0 && purchased.length > 0 && (
+        <div className="card-soft border-primary/30 bg-accent/40 p-6 text-center">
+          <p className="font-display text-2xl">That's everything.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            All {purchased.length} {purchased.length === 1 ? "item" : "items"} bought. Put them
+            away when you're home.
+          </p>
+        </div>
+      )}
+
       {open.length === 0 && purchased.length === 0 && (
         <div className="card-soft p-10 text-center">
-          <p className="text-muted-foreground">
-            The list is empty. Tap the green button to add the first thing.
+          <p className="font-display text-xl">The list is empty.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Tap the green + to add the first thing — everyone in the household sees it instantly.
           </p>
         </div>
       )}
@@ -190,13 +221,16 @@ function ListBody({ household }: { household: Household }) {
                   <Check className="size-4 text-transparent" aria-hidden />
                 </button>
                 <div className={cn("flex-1 py-3", shopping && "py-4")}>
-                  <p className={cn(shopping && "text-lg")}>
+                  <p className={cn("break-words", shopping && "text-lg")}>
                     {item.name}
                     {item.quantity && (
                       <span className="ml-2 text-muted-foreground">{item.quantity}</span>
                     )}
                   </p>
-                  <p className="text-xs text-muted-foreground">{nameOf(item.requested_by)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {nameOf(item.requested_by)}
+                    {item.note && ` · ${item.note}`}
+                  </p>
                 </div>
                 <button
                   aria-label={`Remove ${item.name}`}

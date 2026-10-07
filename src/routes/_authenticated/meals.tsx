@@ -51,6 +51,14 @@ export const Route = createFileRoute("/_authenticated/meals")({
   ),
 });
 
+type UseStatus = "used" | "some" | "still";
+
+const USE_OPTIONS: Array<{ value: UseStatus; label: string }> = [
+  { value: "used", label: "Used up" },
+  { value: "some", label: "Some left" },
+  { value: "still", label: "Didn't use" },
+];
+
 function weekLabel(offset: number, dates: string[]) {
   if (offset === 0) return "This week";
   if (offset === 1) return "Next week";
@@ -108,7 +116,10 @@ function MealsBody({ household }: { household: Household }) {
     { errorMessage: "Couldn't remove that" },
   );
 
-  const [cooking, setCooking] = useState<{ entry: MealEntry; use: string[] } | null>(null);
+  const [cooking, setCooking] = useState<{
+    entry: MealEntry;
+    status: Record<string, UseStatus>;
+  } | null>(null);
 
   /** Kitchen items that match an ingredient of the meal's recipe. */
   function kitchenMatches(entry: MealEntry) {
@@ -124,18 +135,29 @@ function MealsBody({ household }: { household: Household }) {
   );
 
   const cookMeal = useMutate(
-    async ({ entry, use }: { entry: MealEntry; use: string[] }) => {
+    async ({ entry, status }: { entry: MealEntry; status: Record<string, UseStatus> }) => {
       const { error } = await supabase
         .from("meal_plan_entries")
         .update({ cooked: true })
         .eq("id", entry.id);
       if (error) throw error;
-      if (use.length > 0) {
+
+      const usedUp = Object.keys(status).filter((id) => status[id] === "used");
+      if (usedUp.length > 0) {
         const { error: usedError } = await supabase
           .from("inventory_items")
           .delete()
-          .in("id", use);
+          .in("id", usedUp);
         if (usedError) throw usedError;
+      }
+      // Quantities are free text, so "partly used" keeps the item and notes it rather than guessing.
+      for (const inv of inventory.filter((i) => status[i.id] === "some")) {
+        if (inv.quantity?.includes("some used")) continue;
+        const { error: partError } = await supabase
+          .from("inventory_items")
+          .update({ quantity: inv.quantity ? `${inv.quantity} (some used)` : "some used" })
+          .eq("id", inv.id);
+        if (partError) throw partError;
       }
     },
     ["meals", "inventory"],
@@ -143,7 +165,11 @@ function MealsBody({ household }: { household: Household }) {
   );
 
   function startCooking(entry: MealEntry) {
-    setCooking({ entry, use: kitchenMatches(entry).map((c) => c.id) });
+    // Default to the non-destructive answer: nothing leaves the kitchen unless the user says so.
+    setCooking({
+      entry,
+      status: Object.fromEntries(kitchenMatches(entry).map((c) => [c.id, "some" as UseStatus])),
+    });
   }
 
   const addMissing = useMutate(
@@ -243,7 +269,7 @@ function MealsBody({ household }: { household: Household }) {
                     onClick={() => startCooking(meal)}
                     className="flex items-center gap-1 px-1 py-2 text-xs text-muted-foreground hover:text-foreground"
                   >
-                    <Check className="size-3.5" aria-hidden /> cooked
+                    <Check className="size-3.5" aria-hidden /> Mark cooked
                   </button>
                 )}
 
@@ -281,7 +307,7 @@ function MealsBody({ household }: { household: Household }) {
 
             <p className="mt-4 text-sm">
               <span className={have > 0 ? "text-primary" : "text-muted-foreground"}>
-                {have} of {ingredients.length} ingredients at home
+                {have} of {ingredients.length} {ingredients.length === 1 ? "ingredient" : "ingredients"} at home
               </span>
               {missing.length > 0 && (
                 <span className="text-muted-foreground">
@@ -326,47 +352,54 @@ function MealsBody({ household }: { household: Household }) {
       <Dialog open={!!cooking} onOpenChange={(open) => !open && setCooking(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Used it up?</DialogTitle>
+            <DialogTitle>What did you use?</DialogTitle>
             <DialogDescription>
-              Untick anything you still have left — the rest leaves your kitchen.
+              Only items marked “Used up” leave your kitchen. Everything else stays.
             </DialogDescription>
           </DialogHeader>
           {cookCandidates.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Nothing in your kitchen matches this meal, so nothing will be removed.
+              Nothing in your kitchen matches this meal, so nothing will change.
             </p>
           ) : (
-            <ul className="max-h-64 space-y-2 overflow-y-auto">
+            <ul className="max-h-72 space-y-3 overflow-y-auto">
               {cookCandidates.map((inv) => {
-                const ticked = cooking?.use.includes(inv.id) ?? false;
+                const current = cooking?.status[inv.id] ?? "some";
                 return (
-                  <li key={inv.id}>
-                    <button
-                      onClick={() =>
-                        setCooking((c) =>
-                          c
-                            ? {
-                                ...c,
-                                use: ticked
-                                  ? c.use.filter((id) => id !== inv.id)
-                                  : [...c.use, inv.id],
-                              }
-                            : c,
-                        )
-                      }
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left hover:bg-secondary"
+                  <li key={inv.id} className="rounded-2xl border border-border/70 p-3">
+                    <p className="truncate text-sm">
+                      {inv.name}
+                      {inv.quantity && (
+                        <span className="ml-2 text-xs text-muted-foreground">{inv.quantity}</span>
+                      )}
+                    </p>
+                    <div
+                      className="mt-2 grid grid-cols-3 gap-1.5"
+                      role="radiogroup"
+                      aria-label={`How much ${inv.name} was used`}
                     >
-                      <span
-                        className={cn(
-                          "flex size-6 items-center justify-center rounded-full border border-border",
-                          ticked && "border-primary bg-primary text-primary-foreground",
-                        )}
-                      >
-                        <Check className={cn("size-3.5", !ticked && "text-transparent")} aria-hidden />
-                      </span>
-                      <span className="flex-1 text-sm">{inv.name}</span>
-                      <span className="text-xs text-muted-foreground">{inv.quantity}</span>
-                    </button>
+                      {USE_OPTIONS.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={current === option.value}
+                          onClick={() =>
+                            setCooking((c) =>
+                              c ? { ...c, status: { ...c.status, [inv.id]: option.value } } : c,
+                            )
+                          }
+                          className={cn(
+                            "rounded-full border border-border px-2 py-2 text-xs transition-colors",
+                            current === option.value
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "hover:bg-secondary",
+                          )}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
                   </li>
                 );
               })}
@@ -382,15 +415,17 @@ function MealsBody({ household }: { household: Household }) {
                 if (!cooking) return;
                 cookMeal.mutate(cooking, {
                   onSuccess: () => {
+                    const used = Object.values(cooking.status).filter((v) => v === "used").length;
                     toast.success(
-                      cooking.use.length > 0
-                        ? `Cooked — ${cooking.use.length} item${cooking.use.length > 1 ? "s" : ""} used up`
-                        : "Cooked",
+                      used > 0
+                        ? `Marked dinner as cooked · ${used} ${used === 1 ? "item" : "items"} used up`
+                        : "Marked dinner as cooked",
                     );
                     setCooking(null);
                   },
                 });
               }}
+              disabled={cookMeal.isPending}
             >
               Mark cooked
             </Button>

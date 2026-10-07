@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Camera, Pencil, Trash2 } from "lucide-react";
+import { Camera, Pencil, ShoppingCart, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
@@ -174,6 +174,8 @@ function KitchenBody({ household }: { household: Household }) {
         }}
       >
         <Input
+          id="kitchen-add"
+          aria-label={`Add something to the ${LOCATION_LABEL[tab].toLowerCase()}`}
           value={newItem}
           onChange={(e) => setNewItem(e.target.value)}
           placeholder={`Add something to the ${LOCATION_LABEL[tab].toLowerCase()}`}
@@ -186,11 +188,28 @@ function KitchenBody({ household }: { household: Household }) {
       {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
 
       {!isLoading && visible.length === 0 && (
-        <div className="card-soft p-10 text-center">
-          <p className="text-muted-foreground">
-            Nothing recorded in the {LOCATION_LABEL[tab].toLowerCase()} yet. A receipt photo is the
-            fastest way to fill this in.
+        <div className="card-soft p-8 text-center sm:p-10">
+          <p className="font-display text-xl">
+            Your {LOCATION_LABEL[tab].toLowerCase()} is empty.
           </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Add what's there, or scan a receipt and let it fill itself in.
+          </p>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <Button asChild size="sm" className="rounded-full">
+              <Link to="/scan">
+                <Camera className="mr-1.5 size-4" aria-hidden /> Scan a receipt
+              </Link>
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-full"
+              onClick={() => document.getElementById("kitchen-add")?.focus()}
+            >
+              Add an item
+            </Button>
+          </div>
         </div>
       )}
 
@@ -203,10 +222,13 @@ function KitchenBody({ household }: { household: Household }) {
               return (
                 <li
                   key={item.id}
-                  className="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-0"
+                  className={cn(
+                    "flex items-center gap-3 border-b border-border/60 px-4 py-3.5 last:border-0 sm:px-6",
+                    urgent && "border-l-2 border-l-clay",
+                  )}
                 >
-                  <div className="flex-1">
-                    <p>
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words">
                       {item.name}
                       {item.quantity && (
                         <span className="ml-2 text-muted-foreground">{item.quantity}</span>
@@ -227,9 +249,11 @@ function KitchenBody({ household }: { household: Household }) {
                         onSuccess: (message) => message && toast.success(message),
                       })
                     }
-                    className="px-1 py-2 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                    aria-label={`Add ${item.name} to the shopping list`}
+                    title="Need more — add to the list"
+                    className="p-2 text-muted-foreground transition-colors hover:text-foreground"
                   >
-                    Need more
+                    <ShoppingCart className="size-4" aria-hidden />
                   </button>
                   <button
                     aria-label={`Edit ${item.name}`}

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Copy, Trash2 } from "lucide-react";
+import { Copy, Share2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
@@ -79,19 +79,40 @@ function HouseholdBody({ household }: { household: Household }) {
       <section className="card-soft p-7">
         <h2 className="text-xl">{household.name}</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Share this code with the people you live with — they enter it when they sign up.
+          Invite the people you live with. They sign up, choose “Join with a code”, and enter this.
         </p>
-        <div className="mt-5 flex items-center gap-3">
+        <div className="mt-5 flex flex-wrap items-center gap-3">
           <code className="rounded-xl bg-secondary px-5 py-3 font-display text-2xl tracking-[0.2em]">
             {household.invite_code}
           </code>
+          <Button
+            size="sm"
+            className="rounded-full"
+            onClick={async () => {
+              const text = `Join ${household.name} on Larder: sign up at ${window.location.origin}/auth, then choose “Join with a code” and enter ${household.invite_code}.`;
+              if (navigator.share) {
+                try {
+                  await navigator.share({ title: "Join our Larder", text });
+                } catch {
+                  // Dismissed the share sheet — nothing to do.
+                }
+              } else {
+                await navigator.clipboard.writeText(text);
+                toast.success("Invitation copied — paste it into a message");
+              }
+            }}
+          >
+            <Share2 className="mr-1.5 size-4" aria-hidden /> Invite someone
+          </Button>
           <Button
             variant="outline"
             size="sm"
             className="rounded-full"
             onClick={() => {
-              void navigator.clipboard.writeText(household.invite_code);
-              toast.success("Code copied");
+              void navigator.clipboard
+                .writeText(household.invite_code)
+                .then(() => toast.success("Code copied"))
+                .catch(() => toast.error("Couldn't copy — select the code instead"));
             }}
           >
             <Copy className="mr-1.5 size-4" aria-hidden /> Copy

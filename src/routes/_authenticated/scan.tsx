@@ -1,17 +1,18 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
-import { Camera, Loader2, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { AlertCircle, Camera, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { extractReceipt, type ExtractedItem } from "@/lib/receipt.functions";
-import { recordStaplePurchases, useSession, type Household } from "@/lib/data";
-import { LOCATIONS, LOCATION_LABEL, addDays, matchesAny, type StorageLocation } from "@/lib/food";
+import { recordStaplePurchases, useListItems, useSession, type Household } from "@/lib/data";
+import { CATEGORIES, CATEGORY_LABEL, LOCATIONS, LOCATION_LABEL, addDays, sameProduct } from "@/lib/food";
 
 import { cn } from "@/lib/utils";
 
@@ -40,36 +41,69 @@ export const Route = createFileRoute("/_authenticated/scan")({
   ),
 });
 
+const STAGES = ["Preparing the photo…", "Reading the receipt…", "Working out where things live…"];
+
+/** Extraction is a best guess — flag the rows most likely to need a human look. */
+function needsCheck(item: ExtractedItem) {
+  const name = item.name.trim();
+  return name.length < 3 || item.category === "other" || !(item.shelf_life_days > 0);
+}
+
 function ScanBody({ household }: { household: Household }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<ExtractedItem[] | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  // List items the user has un-ticked from "this matches your list".
+  const [declined, setDeclined] = useState<Set<string>>(new Set());
   const extract = useServerFn(extractReceipt);
   const { userId } = useSession();
+  const { data: listItems = [] } = useListItems(household.id);
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const busy = stage !== null;
+
+  const openList = useMemo(() => listItems.filter((i) => i.status === "open"), [listItems]);
+
+  /** For each scanned row, the open list item it probably corresponds to (each list item used once). */
+  const matches = useMemo(() => {
+    const taken = new Set<string>();
+    return (items ?? []).map((item) => {
+      if (!item.name.trim()) return null;
+      const hit = openList.find((li) => !taken.has(li.id) && sameProduct(li.name, item.name));
+      if (hit) taken.add(hit.id);
+      return hit ?? null;
+    });
+  }, [items, openList]);
 
   async function onFile(file: File) {
-    setBusy(true);
+    setStage(0);
     try {
       const dataUrl = await toCompressedDataUrl(file);
       if (dataUrl.length > 11_000_000) {
         toast.error("That photo is too large — try one that's just the receipt.");
         return;
       }
-      const result = await extract({ data: { imageDataUrl: dataUrl } });
+      setStage(1);
+      const timer = window.setTimeout(() => setStage(2), 4000);
+      let result: Awaited<ReturnType<typeof extract>>;
+      try {
+        result = await extract({ data: { imageDataUrl: dataUrl } });
+      } finally {
+        window.clearTimeout(timer);
+      }
       if (result.items.length === 0) {
         toast.error("No items found — try a clearer photo of the whole receipt.");
+        return;
       }
+      setDeclined(new Set());
       setItems(result.items);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't read that receipt.");
     } finally {
-      setBusy(false);
+      setStage(null);
     }
   }
-
 
   function updateItem(index: number, patch: Partial<ExtractedItem>) {
     setItems((current) =>
@@ -77,15 +111,19 @@ function ScanBody({ household }: { household: Household }) {
     );
   }
 
+  const kept = (items ?? []).filter((i) => i.name.trim());
+  const confirmedMatches = matches.filter(
+    (m, i): m is NonNullable<typeof m> => !!m && !!items?.[i]?.name.trim() && !declined.has(m.id),
+  );
+
   async function save() {
-    const kept = items?.filter((i) => i.name.trim()) ?? [];
     if (kept.length === 0 || saving) return;
     setSaving(true);
     try {
       const rows = kept.map((item) => ({
         household_id: household.id,
         name: item.name.trim(),
-        quantity: item.quantity ?? null,
+        quantity: item.quantity?.trim() || null,
         category: item.category,
         location: item.location,
         expires_on: addDays(Math.max(1, Math.round(item.shelf_life_days || 7))),
@@ -94,35 +132,32 @@ function ScanBody({ household }: { household: Household }) {
       const { error } = await supabase.from("inventory_items").insert(rows);
       if (error) throw error;
 
-      const names = kept.map((i) => i.name);
-      const { data: openItems } = await supabase
-        .from("list_items")
-        .select("id, name")
-        .eq("household_id", household.id)
-        .eq("status", "open");
-      const matched = (openItems ?? []).filter((li) => matchesAny(li.name, names));
-      if (matched.length > 0) {
+      // Only list items the user left ticked are removed — never a silent fuzzy match.
+      if (confirmedMatches.length > 0) {
         const { error: tickError } = await supabase
           .from("list_items")
           .delete()
           .in(
             "id",
-            matched.map((m) => m.id),
+            confirmedMatches.map((m) => m.id),
           );
         if (tickError) throw tickError;
       }
-      await recordStaplePurchases(household.id, names);
-
+      await recordStaplePurchases(
+        household.id,
+        kept.map((i) => i.name),
+      );
 
       await qc.invalidateQueries();
       toast.success(
-        matched.length > 0
-          ? `${kept.length} items put away, ${matched.length} ticked off the list`
-          : `${kept.length} items put away`,
+        `${kept.length} ${kept.length === 1 ? "grocery" : "groceries"} added to your kitchen` +
+          (confirmedMatches.length > 0
+            ? ` · ${confirmedMatches.length} shopping-list ${confirmedMatches.length === 1 ? "item" : "items"} checked off`
+            : ""),
       );
       navigate({ to: "/kitchen" });
     } catch {
-      toast.error("Couldn't save those items");
+      toast.error("Couldn't save those items — nothing was lost, try again.");
     } finally {
       setSaving(false);
     }
@@ -144,34 +179,51 @@ function ScanBody({ household }: { household: Household }) {
       />
 
       {!items && (
-        <div className="card-soft flex flex-col items-center p-12 text-center">
-          <Camera className="size-8 text-primary" strokeWidth={1.4} aria-hidden />
-          <p className="mt-5 max-w-sm text-sm text-muted-foreground">
-            Lay the receipt flat, get the whole thing in frame, and we'll work out what you bought
-            and where it lives at home.
-          </p>
-          <Button
-            className="mt-7 rounded-full px-7"
-            onClick={() => fileInput.current?.click()}
-            disabled={busy}
-          >
-            {busy ? (
-              <>
-                <Loader2 className="mr-2 size-4 animate-spin" aria-hidden /> Reading the receipt…
-              </>
-            ) : (
-              "Choose or take a photo"
-            )}
-          </Button>
+        <div className="card-soft p-8 sm:p-10">
+          <div className="flex flex-col items-center text-center">
+            <Camera className="size-8 text-primary" strokeWidth={1.4} aria-hidden />
+            <h2 className="mt-4 text-xl">Photograph your receipt</h2>
+          </div>
+          <ul className="mx-auto mt-5 max-w-sm space-y-2 text-sm text-muted-foreground">
+            <li>Lay it flat and get the whole receipt in frame, top to bottom.</li>
+            <li>Use good light and avoid shadows or glare.</li>
+            <li>You'll review everything before it goes into your kitchen.</li>
+          </ul>
+          {busy ? (
+            <div className="mt-7 flex flex-col items-center gap-3" role="status" aria-live="polite">
+              <Loader2 className="size-5 animate-spin text-primary" aria-hidden />
+              <p className="text-sm">{STAGES[stage ?? 0]}</p>
+              <div className="flex gap-1.5" aria-hidden>
+                {STAGES.map((_, i) => (
+                  <span
+                    key={i}
+                    className={cn(
+                      "h-1 w-10 rounded-full transition-colors",
+                      i <= (stage ?? 0) ? "bg-primary" : "bg-secondary",
+                    )}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-7 flex justify-center">
+              <Button className="rounded-full px-7" onClick={() => fileInput.current?.click()}>
+                Choose or take a photo
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
       {items && (
         <>
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">
-              {items.length} items found. Fix any names or places that are wrong, or remove them.
-            </p>
+            <div>
+              <h2 className="text-xl">Review {items.length} items</h2>
+              <p className="text-sm text-muted-foreground">
+                Nothing is saved until you confirm. Fix anything that looks off.
+              </p>
+            </div>
             <Button
               size="sm"
               variant="ghost"
@@ -184,53 +236,121 @@ function ScanBody({ household }: { household: Household }) {
 
           <section className="card-soft overflow-hidden">
             <ul>
-              {items.map((item, index) => (
-                <li
-                  key={index}
-                  className="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-0"
-                >
-                  <div className="min-w-0 flex-1 space-y-1.5">
-                    <Input
-                      aria-label={`Name of ${item.name}`}
-                      value={item.name}
-                      onChange={(e) => updateItem(index, { name: e.target.value })}
-                      className="h-9"
-                    />
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <select
-                        aria-label={`Where ${item.name} is kept`}
-                        value={item.location}
-                        onChange={(e) => updateItem(index, { location: e.target.value })}
-                        className="rounded-md border border-border bg-background px-2 py-1"
-                      >
-                        {LOCATIONS.map((l) => (
-                          <option key={l} value={l}>
-                            {LOCATION_LABEL[l]}
-                          </option>
-                        ))}
-                      </select>
-                      <span>keeps ~{Math.max(1, Math.round(item.shelf_life_days || 7))} days</span>
-                    </div>
-                  </div>
-                  <button
-                    aria-label={`Remove ${item.name}`}
-                    onClick={() => setItems(items.filter((_, i) => i !== index))}
-                    className="-mr-2 p-2 text-muted-foreground hover:text-destructive"
+              {items.map((item, index) => {
+                const match = matches[index];
+                const check = needsCheck(item);
+                return (
+                  <li
+                    key={index}
+                    className="border-b border-border/60 px-4 py-4 last:border-0 sm:px-6"
                   >
-                    <X className="size-4" aria-hidden />
-                  </button>
-                </li>
-              ))}
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <Input
+                          aria-label={`Name of item ${index + 1}`}
+                          value={item.name}
+                          onChange={(e) => updateItem(index, { name: e.target.value })}
+                          className="h-10"
+                        />
+                        <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                          <Input
+                            aria-label={`Quantity of ${item.name}`}
+                            placeholder="Amount"
+                            value={item.quantity ?? ""}
+                            onChange={(e) => updateItem(index, { quantity: e.target.value || null })}
+                            className="h-9"
+                          />
+                          <select
+                            aria-label={`Category of ${item.name}`}
+                            value={item.category}
+                            onChange={(e) => updateItem(index, { category: e.target.value })}
+                            className="h-9 rounded-md border border-input bg-background px-2"
+                          >
+                            {CATEGORIES.map((c) => (
+                              <option key={c} value={c}>
+                                {CATEGORY_LABEL[c]}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            aria-label={`Where ${item.name} is kept`}
+                            value={item.location}
+                            onChange={(e) => updateItem(index, { location: e.target.value })}
+                            className="h-9 rounded-md border border-input bg-background px-2"
+                          >
+                            {LOCATIONS.map((l) => (
+                              <option key={l} value={l}>
+                                {LOCATION_LABEL[l]}
+                              </option>
+                            ))}
+                          </select>
+                          <label className="flex h-9 items-center gap-1.5 text-xs text-muted-foreground">
+                            Keeps
+                            <Input
+                              type="number"
+                              min={1}
+                              inputMode="numeric"
+                              aria-label={`Days ${item.name} keeps`}
+                              value={Math.max(1, Math.round(item.shelf_life_days || 7))}
+                              onChange={(e) =>
+                                updateItem(index, { shelf_life_days: Number(e.target.value) || 1 })
+                              }
+                              className="h-9 w-16 px-2"
+                            />
+                            days
+                          </label>
+                        </div>
+                        {check && (
+                          <p className="flex items-center gap-1.5 text-xs text-clay">
+                            <AlertCircle className="size-3.5" aria-hidden /> Worth a quick check —
+                            we weren't sure about this one.
+                          </p>
+                        )}
+                        {match && (
+                          <label className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2 text-xs">
+                            <Checkbox
+                              checked={!declined.has(match.id)}
+                              onCheckedChange={(checked) =>
+                                setDeclined((current) => {
+                                  const next = new Set(current);
+                                  if (checked) next.delete(match.id);
+                                  else next.add(match.id);
+                                  return next;
+                                })
+                              }
+                            />
+                            <span>
+                              Matches “{match.name}” on your list — check it off
+                            </span>
+                          </label>
+                        )}
+                      </div>
+                      <button
+                        aria-label={`Remove ${item.name || `item ${index + 1}`}`}
+                        onClick={() => setItems(items.filter((_, i) => i !== index))}
+                        className="-mr-1 p-2 text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="size-4" aria-hidden />
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </section>
 
-          <Button
-            className={cn("w-full rounded-full")}
-            onClick={save}
-            disabled={saving || items.length === 0}
-          >
-            {saving ? "Putting things away…" : "Put it all in the kitchen"}
-          </Button>
+          <div className="sticky bottom-24 sm:bottom-4">
+            <Button
+              className="h-12 w-full rounded-full shadow-[var(--shadow-lift)]"
+              onClick={save}
+              disabled={saving || kept.length === 0}
+            >
+              {saving
+                ? "Putting things away…"
+                : `Add ${kept.length} ${kept.length === 1 ? "grocery" : "groceries"} to the kitchen` +
+                  (confirmedMatches.length > 0 ? ` · check off ${confirmedMatches.length}` : "")}
+            </Button>
+          </div>
         </>
       )}
     </div>

@@ -74,6 +74,27 @@ function RecipeDetail({ household, id }: { household: Household; id: string }) {
           </button>
         </div>
 
+        <p
+          className={cn(
+            "mt-4 rounded-2xl px-4 py-3 text-sm",
+            missing.length === 0 ? "bg-accent text-accent-foreground" : "bg-secondary",
+          )}
+        >
+          {missing.length === 0 ? (
+            <>
+              <strong className="font-medium">You can cook this tonight</strong> — everything is at
+              home.
+            </>
+          ) : (
+            <>
+              <strong className="font-medium">
+                {ingredients.length - missing.length} of {ingredients.length} ingredients at home.
+              </strong>{" "}
+              Missing: {missing.map((m) => m.name).join(", ")}.
+            </>
+          )}
+        </p>
+
         <div className="mt-5 flex flex-wrap items-center gap-2">
           <div className="flex gap-1 overflow-x-auto">
             {dates.map((d) => (
@@ -135,6 +156,7 @@ function RecipeDetail({ household, id }: { household: Household; id: string }) {
                   <Check className={cn("size-3", !have && "text-transparent")} aria-hidden />
                 </span>
                 <span className={cn("flex-1", !have && "text-muted-foreground")}>
+                  <span className="sr-only">{have ? "Have: " : "Missing: "}</span>
                   {ing.name}
                   {ing.optional && <span className="text-xs text-muted-foreground"> (optional)</span>}
                 </span>

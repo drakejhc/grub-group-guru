@@ -108,6 +108,8 @@ function Setup() {
       <h1 className="text-3xl">Set up your household</h1>
       <p className="mt-2 text-muted-foreground">
         A household is the group of people who share a list, a kitchen and the week's meals.
+        Start one, or join the one you live with — you can invite everyone else afterwards and add
+        your first groceries in a minute.
       </p>
 
       <form onSubmit={createHousehold} className="card-soft mt-8 space-y-4 p-7">
