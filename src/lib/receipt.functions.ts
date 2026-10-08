@@ -12,6 +12,9 @@ export type ExtractedItem = {
   category: string;
   location: string;
   shelf_life_days: number;
+  /** false when the receipt line was abbreviated or hard to read */
+  confident?: boolean;
+  receipt_text?: string;
 };
 
 const SYSTEM = `You read photos of grocery receipts and return the food and household items purchased.
@@ -21,6 +24,7 @@ Rules:
 - category must be one of: produce, meat, dairy, bakery, frozen, pantry, drinks, household, other.
 - location must be one of: fridge, pantry, freezer — where the item is normally kept at home.
 - shelf_life_days is a realistic estimate of how long it stays good once home.
+- receipt_text is the line as printed. confident is false when the line was cryptic, cut off or you had to guess the product.
 - If the image is not a receipt, return an empty items array.`;
 
 export const extractReceipt = createServerFn({ method: "POST" })
@@ -80,6 +84,8 @@ export const extractReceipt = createServerFn({ method: "POST" })
                         },
                         location: { type: "string", enum: ["fridge", "pantry", "freezer"] },
                         shelf_life_days: { type: "number" },
+                        confident: { type: "boolean" },
+                        receipt_text: { type: "string" },
                       },
                       required: ["name", "category", "location", "shelf_life_days"],
                     },
