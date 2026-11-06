@@ -69,7 +69,12 @@ function AuthPage() {
       redirect_uri: window.location.origin,
     });
     if (result.error) {
-      toast.error("Google sign-in didn't work");
+      console.error("Google sign-in error", result.error);
+      toast.error(
+        result.error instanceof Error && result.error.message
+          ? `Google sign-in didn't work: ${result.error.message}`
+          : "Google sign-in didn't work — please try again",
+      );
       return;
     }
     if (result.redirected) return;
