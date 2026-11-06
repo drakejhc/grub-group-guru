@@ -42,7 +42,7 @@ function AuthPage() {
     setBusy(true);
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -51,6 +51,15 @@ function AuthPage() {
           },
         });
         if (error) throw error;
+        if (!data.session) {
+          toast.success("Account created — check your email", {
+            description: `We sent a confirmation link to ${email}. Tap it, then sign in.`,
+            duration: 12000,
+          });
+          setIsSignUp(false);
+          setPassword("");
+          return;
+        }
         toast.success("Welcome to Larder");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
