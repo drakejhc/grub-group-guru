@@ -188,7 +188,7 @@ function ItemGroup({
   items,
   onOpen,
 }: {
-  title?: string;
+  title?: string | undefined;
   items: InventoryItem[];
   onOpen: (i: InventoryItem) => void;
 }) {
